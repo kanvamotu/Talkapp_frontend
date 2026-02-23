@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 //import { connectSocket } from "../socket";
 
-const API_URL = "https://talkappbackend-production.up.railway.app";
+const API_URL = process.env.REACT_APP_BASE_URL;
 
 const Login = ({ setLoggedIn, switchToRegister }) => {
   const [email, setEmail] = useState("");

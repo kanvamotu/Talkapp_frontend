@@ -81,7 +81,7 @@ const Chat = () => {
   const receiverRef = useRef(null);
   const listenersAttachedRef = useRef(false);
 
-  const API_URL = "https://talkappbackend-production.up.railway.app";
+ const API_URL = process.env.REACT_APP_BASE_URL;
 
 
 
@@ -135,7 +135,7 @@ const Chat = () => {
       .get(`${API_URL}/chat-users/${userId}`)
       .then((res) => setUsers(res.data.filter((u) => String(u.id) !== userId)))
       .catch((err) => console.error("❌ Fetch users error:", err.message));
-  }, [userId]);
+  }, [userId, API_URL]);
 
   /* 🔔 SOCKET LISTENERS */
   useEffect(() => {

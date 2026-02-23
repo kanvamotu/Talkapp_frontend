@@ -8,7 +8,7 @@ const Register = ({ switchToLogin }) => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const API_URL = "https://talkappbackend-production.up.railway.app";
+ const API_URL = process.env.REACT_APP_BASE_URL;
 
   const handleRegister = async (e) => {
     e.preventDefault();
