@@ -2,7 +2,7 @@ import { io } from "socket.io-client";
 
 let socket = null;
 
- const API_URL = "http://localhost:10000"
+ const API_URL =  process.env.REACT_APP_BASE_URL;
 export const connectSocket = (accessToken) => {
   if (socket) return socket;
 
