@@ -404,7 +404,7 @@ const Chat = () => {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await axios.post(`${API_URL}/upload-audio`, formData, {
+    const res = await axios.post(`${API_URL}/upload-media`, formData, {
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "multipart/form-data",
