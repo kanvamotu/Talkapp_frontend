@@ -3,14 +3,9 @@ import axios from "axios";
 import { connectSocket } from "../socket";
 import Profile from "./Profile";
 import DeletePopup from "./deletePopup";
+import Call from "./Call";
 
-/* 🔌 ICE CONFIG */
-const ICE_CONFIG = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-  ],
-};
+
 
 const modalOverlayStyle = {
   position: "fixed",
@@ -48,8 +43,7 @@ const Chat = () => {
   const [darkMode, setDarkMode] = useState(
     localStorage.getItem("darkMode") === "true",
   );
-  const [inCall, setInCall] = useState(false);
-  const [isVideoCall, setIsVideoCall] = useState(false); // all users from backend
+
   const [showAddModal, setShowAddModal] = useState(false); // control modal
   const [searchText, setSearchText] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -66,13 +60,9 @@ const Chat = () => {
   const [replyTo, setReplyTo] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [callData, setCallData] = useState(null);
 
   const socketRef = useRef(null);
-  const pcRef = useRef(null);
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
-  const localAudioRef = useRef(null);
-  const remoteAudioRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const fileInputRef = useRef(null);
@@ -81,9 +71,7 @@ const Chat = () => {
   const receiverRef = useRef(null);
   const listenersAttachedRef = useRef(false);
 
- const API_URL = process.env.REACT_APP_BASE_URL;
-
-
+  const API_URL = process.env.REACT_APP_BASE_URL;
 
   useEffect(() => {
     const handleResize = () => {
@@ -168,40 +156,6 @@ const Chat = () => {
     /* ONLINE USERS */
     socket.on("onlineUsers", setOnlineUsers);
 
-    socket.on("incomingCall", async ({ from, offer }) => {
-      setInCall(true);
-      setIsVideoCall(true);
-      if (pcRef.current) return;
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
-      const pc = new RTCPeerConnection(ICE_CONFIG);
-      pcRef.current = pc;
-
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-
-      pc.ontrack = (e) => {
-        if (remoteVideoRef.current) {
-          remoteVideoRef.current.srcObject = e.streams[0];
-        }
-      };
-
-      pc.onicecandidate = (e) => {
-        if (e.candidate)
-          safeEmit("iceCandidate", { to: from, candidate: e.candidate });
-      };
-
-      await pc.setRemoteDescription(offer);
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      safeEmit("acceptCall", { to: from, answer });
-    });
-
     /* MESSAGE SEEN */
     socket.on("messagesSeen", ({ senderId }) => {
       setMessagesByUser((prev) => {
@@ -247,8 +201,13 @@ const Chat = () => {
       });
     });
 
-    socket.on("callAccepted", async ({ answer }) => {
-      await pcRef.current?.setRemoteDescription(answer);
+    /* 📞 INCOMING CALL */
+    socket.on("incomingCall", ({ from, offer }) => {
+      setCallData({
+        type: "incoming",
+        userId: String(from),
+        offer,
+      });
     });
 
     /* ✏️ MESSAGE EDITED */
@@ -265,10 +224,6 @@ const Chat = () => {
         });
         return updated;
       });
-    });
-
-    socket.on("iceCandidate", ({ candidate }) => {
-      pcRef.current?.addIceCandidate(candidate);
     });
 
     return () => {
@@ -368,71 +323,14 @@ const Chat = () => {
   };
 
   /* 📞 START CALL */
-  const startCall = async (receiverId, isVideo = true) => {
-    if (pcRef.current) return;
+  const startCall = (receiverId, isVideo = true) => {
+    if (!receiverId) return;
 
-    setInCall(true);
-    setIsVideoCall(isVideo);
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: isVideo,
-      audio: true,
+    setCallData({
+      type: "outgoing",
+      userId: String(receiverId),
+      isVideo,
     });
-
-    if (isVideo) localVideoRef.current.srcObject = stream;
-    else localAudioRef.current.srcObject = stream;
-
-    const pc = new RTCPeerConnection(ICE_CONFIG);
-    pcRef.current = pc;
-
-    stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-
-    pc.ontrack = (e) => {
-      if (isVideo) remoteVideoRef.current.srcObject = e.streams[0];
-      else remoteAudioRef.current.srcObject = e.streams[0];
-    };
-
-    pc.onicecandidate = (e) => {
-      if (e.candidate)
-        safeEmit("iceCandidate", { to: receiverId, candidate: e.candidate });
-    };
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    safeEmit("callUser", { to: receiverId, offer });
-  };
-
-  /* ❌ END CALL */
-  const endCall = () => {
-    if (receiver) safeEmit("endCall", { to: receiver.id });
-
-    // Close PeerConnection
-    pcRef.current?.close();
-    pcRef.current = null;
-
-    // Stop local video tracks safely
-    if (localVideoRef.current?.srcObject) {
-      localVideoRef.current.srcObject
-        .getTracks()
-        .forEach((track) => track.stop());
-      localVideoRef.current.srcObject = null;
-    }
-
-    // Stop local audio tracks safely
-    if (localAudioRef.current?.srcObject) {
-      localAudioRef.current.srcObject
-        .getTracks()
-        .forEach((track) => track.stop());
-      localAudioRef.current.srcObject = null;
-    }
-
-    // Clear remote streams safely
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
-
-    setInCall(false);
-    setIsVideoCall(false);
   };
 
   /* 🎤 START RECORDING */
@@ -463,7 +361,7 @@ const Chat = () => {
         const formData = new FormData();
         formData.append("audio", audioBlob, `audio_${Date.now()}.webm`);
 
-        const res = await axios.post(  `${API_URL}/upload-audio`,  formData, );
+        const res = await axios.post(`${API_URL}/upload-audio`, formData);
 
         safeEmit("sendMessage", {
           receiver: receiver.id,
@@ -508,11 +406,9 @@ const Chat = () => {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await axios.post(
-      `${API_URL}/upload-media`,
-      formData,
-      { headers: { Authorization: `Bearer ${token}` } },
-    );
+    const res = await axios.post(`${API_URL}/upload-media`, formData, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
 
     const type = file.type.startsWith("image")
       ? "image"
@@ -676,8 +572,8 @@ const Chat = () => {
                   }
 
                   try {
-                    const res = await axios.get
-                      (`${API_URL}/search-user?username=${searchText}&userId=${userId}`,
+                    const res = await axios.get(
+                      `${API_URL}/search-user?username=${searchText}&userId=${userId}`,
                     );
                     setSearchResults(
                       res.data.filter(
@@ -864,7 +760,7 @@ const Chat = () => {
               {/* RIGHT SIDE */}
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <button
-                  onClick={() => startCall(receiver.id, false)}
+                  onClick={() => receiver && startCall(receiver.id, false)}
                   disabled={!receiver}
                   style={styles.callBtn}
                   title="Audio Call"
@@ -874,7 +770,7 @@ const Chat = () => {
                 </button>
 
                 <button
-                  onClick={() => startCall(receiver.id, true)}
+                  onClick={() => receiver && startCall(receiver.id, true)}
                   disabled={!receiver}
                   style={styles.callBtn}
                   title="Video Call"
@@ -1007,7 +903,7 @@ const Chat = () => {
                         });
                         el.style.background = "#fde68a";
                         setTimeout(() => {
-                        el.style.background = "";
+                          el.style.background = "";
                         }, 1500);
                       }
                     }}
@@ -1088,12 +984,13 @@ const Chat = () => {
               y={deletePopupPosition.y}
               onClose={() => setShowDeletePopup(false)}
               showEveryone={currentMsgForPopup.sender === userId}
-              onDeleteForMe={() =>{ deleteMessage(currentMsgForPopup.id, "me");
+              onDeleteForMe={() => {
+                deleteMessage(currentMsgForPopup.id, "me");
                 setShowDeletePopup(false);
               }}
-              onDeleteForEveryone={() =>
-               { deleteMessage(currentMsgForPopup.id, "everyone");
-                 setShowDeletePopup(false);
+              onDeleteForEveryone={() => {
+                deleteMessage(currentMsgForPopup.id, "everyone");
+                setShowDeletePopup(false);
               }}
               onEdit={() => {
                 setEditingMessage(currentMsgForPopup);
@@ -1106,25 +1003,8 @@ const Chat = () => {
           )}
         </div>
 
-        {/* VIDEO CALL */}
-        {inCall && isVideoCall && (
-          <div style={styles.videoContainer}>
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              style={styles.videoSmall}
-            />
-            <video ref={remoteVideoRef} autoPlay style={styles.videoLarge} />
-          </div>
-        )}
-
-        {/* AUDIO CALL */}
-        {inCall && !isVideoCall && (
-          <div>
-            <audio ref={localAudioRef} autoPlay muted />
-            <audio ref={remoteAudioRef} autoPlay />
-          </div>
+        {callData && (
+          <Call  socket={socketRef.current}  callData={callData}  setCallData={setCallData}  currentUser={userData}  />
         )}
 
         {/* 🔁 REPLY BAR */}
@@ -1219,11 +1099,6 @@ const Chat = () => {
           >
             {" "}
             🔗{" "}
-          </button>
-
-          <button onClick={endCall} style={styles.callBtn} disabled={!inCall}>
-            {" "}
-            ✆{" "}
           </button>
 
           <button
