@@ -5,8 +5,6 @@ import Profile from "./Profile";
 import DeletePopup from "./deletePopup";
 import Call from "./Call";
 
-
-
 const modalOverlayStyle = {
   position: "fixed",
   top: 0,
@@ -406,8 +404,11 @@ const Chat = () => {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await axios.post(`${API_URL}/upload-media`, formData, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await axios.post(`${API_URL}/upload-audio`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "multipart/form-data",
+      },
     });
 
     const type = file.type.startsWith("image")
@@ -1004,7 +1005,12 @@ const Chat = () => {
         </div>
 
         {callData && (
-          <Call  socket={socketRef.current}  callData={callData}  setCallData={setCallData}  currentUser={userData}  />
+          <Call
+            socket={socketRef.current}
+            callData={callData}
+            setCallData={setCallData}
+            currentUser={userData}
+          />
         )}
 
         {/* 🔁 REPLY BAR */}
