@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import axios from "axios";
-//import { connectSocket } from "../socket";
 
 const API_URL = process.env.REACT_APP_BASE_URL;
 
@@ -19,11 +18,11 @@ const Login = ({ setLoggedIn, switchToRegister }) => {
         password,
       });
 
-  localStorage.setItem("accessToken", res.data.accessToken);
-localStorage.setItem("refreshToken", res.data.refreshToken);
-localStorage.setItem("user", JSON.stringify(res.data.user));
+      localStorage.setItem("accessToken", res.data.accessToken);
+      localStorage.setItem("refreshToken", res.data.refreshToken);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
 
-setLoggedIn(true);
+      setLoggedIn(true);
     } catch {
       setError("Invalid email or password");
     }
@@ -31,44 +30,43 @@ setLoggedIn(true);
 
   return (
     <div style={styles.container}>
-      <h2>Login</h2>
+      <div style={styles.card}>
+        <h2 style={styles.title}>Welcome Back</h2>
+        <p style={styles.subtitle}>Login to your account</p>
 
-      <form onSubmit={handleLogin} style={styles.form}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          style={styles.input}
-        />
+        <form onSubmit={handleLogin} style={styles.form}>
+          <input
+            type="email"
+            placeholder="Enter your email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            style={styles.input}
+          />
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          style={styles.input}
-        />
+          <input
+            type="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            style={styles.input}
+          />
 
-        <button type="submit" style={styles.button}>
-          Login
-        </button>
+          <button type="submit" style={styles.button}>
+            Login
+          </button>
 
-        {error && <p style={styles.error}>{error}</p>}
-      </form>
+          {error && <p style={styles.error}>{error}</p>}
+        </form>
 
-      {/* 🔥 REGISTER LINK */}
-      <p style={{ marginTop: 10 }}>
-        New user?{" "}
-        <span
-          style={{ color: "blue", cursor: "pointer" }}
-          onClick={switchToRegister}
-        >
-          Create an account
-        </span>
-      </p>
+        <p style={styles.registerText}>
+          New user?{" "}
+          <span style={styles.registerLink} onClick={switchToRegister}>
+            Create an account
+          </span>
+        </p>
+      </div>
     </div>
   );
 };
@@ -79,26 +77,65 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
+    background: "linear-gradient(135deg, #667eea, #764ba2)",
+    fontFamily: "Arial, sans-serif",
+  },
+  card: {
+    background: "#fff",
+    padding: "40px",
+    borderRadius: "10px",
+    boxShadow: "0 10px 25px rgba(0,0,0,0.2)",
+    width: "350px",
+    textAlign: "center",
+  },
+  title: {
+    marginBottom: "5px",
+    fontSize: "28px",
+    fontWeight: "bold",
+    color: "#333",
+  },
+  subtitle: {
+    marginBottom: "25px",
+    color: "#777",
+    fontSize: "14px",
   },
   form: {
-    width: 300,
     display: "flex",
     flexDirection: "column",
-    gap: 10,
+    gap: "15px",
   },
   input: {
-    padding: 10,
-    fontSize: 16,
+    padding: "12px",
+    borderRadius: "6px",
+    border: "1px solid #ddd",
+    fontSize: "14px",
+    outline: "none",
+    transition: "0.3s",
   },
   button: {
-    padding: 10,
-    fontSize: 16,
+    padding: "12px",
+    borderRadius: "6px",
+    border: "none",
+    background: "#667eea",
+    color: "#fff",
+    fontSize: "16px",
+    fontWeight: "bold",
     cursor: "pointer",
+    transition: "0.3s",
   },
   error: {
     color: "red",
+    fontSize: "14px",
+  },
+  registerText: {
+    marginTop: "20px",
+    fontSize: "14px",
+  },
+  registerLink: {
+    color: "#667eea",
+    fontWeight: "bold",
+    cursor: "pointer",
   },
 };
-
 
 export default Login;
