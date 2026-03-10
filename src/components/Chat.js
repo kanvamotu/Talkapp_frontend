@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import Sidebar from "./Sidebar";
+import Sidebar from "./SideBar"; // make sure this matches exactly
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
 import ReplyBar from "./ReplyBar";
 import AddUserModal from "./AddUserModal";
 import Profile from "./Profile";
-import DeletePopup from "./DeletePopup";
+import DeletePopup from "./deletePopup";
 
 const Chat = ({ user, darkMode, socket }) => {
 

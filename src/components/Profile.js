@@ -1,5 +1,5 @@
 import React from "react";
-import Logout from "../Logout";
+import Logout from "./Logout";
 
 const Profile = ({ user }) => {
   if (!user) return null;
