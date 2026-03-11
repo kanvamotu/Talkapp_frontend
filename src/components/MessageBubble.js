@@ -2,8 +2,8 @@ import React from "react";
 
 const MessageBubble = ({ msg, isMine, darkMode, onReply, onEdit, openDeletePopup }) => {
 
-  const time = msg?.created_at
-    ? new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  const time = msg?.createdAt
+    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : "";
 
   return (
@@ -46,18 +46,18 @@ const MessageBubble = ({ msg, isMine, darkMode, onReply, onEdit, openDeletePopup
         {msg?.type === "text" && <div style={styles.text}>{msg?.message}</div>}
 
         {msg?.type === "image" && (
-          <img src={msg?.file_url} alt="img" style={styles.image} />
+          <img src={msg?.mediaUrl} alt="img" style={styles.image} />
         )}
 
         {msg?.type === "video" && (
           <video controls style={styles.video}>
-            <source src={msg?.file_url} type="video/mp4" />
+            <source src={msg?.mediaUrl} type="video/mp4" />
           </video>
         )}
 
         {msg?.type === "audio" && (
           <audio controls>
-            <source src={msg?.file_url} type="audio/mpeg" />
+            <source src={msg?.mediaUrl} type="audio/mpeg" />
           </audio>
         )}
 

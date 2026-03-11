@@ -15,22 +15,32 @@ const MessageInput = ({ sendMessage, darkMode }) => {
     setText("");
   };
 
-  const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+const handleFile = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    const type = file.type.startsWith("image")
-      ? "image"
-      : file.type.startsWith("video")
-      ? "video"
-      : "file";
+  const formData = new FormData();
+  formData.append("file", file);
 
-    sendMessage({
-      type,
-      file,
-      message: file.name,
-    });
-  };
+  const res = await fetch(
+    `${process.env.REACT_APP_BASE_URL}/upload-media`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+      },
+      body: formData,
+    }
+  );
+
+  const data = await res.json();
+
+  sendMessage({
+    type: file.type.startsWith("image") ? "image" : "video",
+    mediaUrl: data.url,
+    message: "",
+  });
+};
 
   return (
     <div

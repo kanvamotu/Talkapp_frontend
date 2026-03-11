@@ -9,7 +9,6 @@ import Profile from "./Profile";
 import DeletePopup from "./deletePopup";
 
 const Chat = ({ user, darkMode, socket }) => {
-
   const [chats, setChats] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -50,14 +49,11 @@ const Chat = ({ user, darkMode, socket }) => {
     setCurrentChat(chat);
 
     try {
-      const res = await fetch(
-        `${API_URL}/messages/${user.id}/${chat.id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-          },
-        }
-      );
+      const res = await fetch(`${API_URL}/messages/${user.id}/${chat.id}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      });
 
       const data = await res.json();
       setMessages(data);
@@ -68,55 +64,53 @@ const Chat = ({ user, darkMode, socket }) => {
 
   /* ================= SOCKET RECEIVE MESSAGE ================= */
 
-useEffect(() => {
-  if (!socket) return;
+  useEffect(() => {
+    if (!socket) return;
 
-  const handleReceive = (msg) => {
+    const handleReceive = (msg) => {
+      if (
+        (msg.sender === user.id && msg.receiver === currentChat?.id) ||
+        (msg.sender === currentChat?.id && msg.receiver === user.id)
+      ) {
+        setMessages((prev) => {
+          const exists = prev.find((m) => m.id === msg.id);
+          if (exists) return prev;
+          return [...prev, msg];
+        });
+      }
+    };
 
-    if (
-      (msg.sender === user.id && msg.receiver === currentChat?.id) ||
-      (msg.sender === currentChat?.id && msg.receiver === user.id)
-    ) {
-      setMessages((prev) => {
-        const exists = prev.find((m) => m.id === msg.id);
-        if (exists) return prev;
-        return [...prev, msg];
-      });
-    }
+    socket.on("receiveMessage", handleReceive);
 
-  };
-
-  socket.on("receiveMessage", handleReceive);
-
-  return () => socket.off("receiveMessage", handleReceive);
-
-}, [socket, currentChat, user]);
+    return () => socket.off("receiveMessage", handleReceive);
+  }, [socket, currentChat, user]);
 
   /* ================= SEND MESSAGE ================= */
 
-const sendMessage = (msg) => {
-  if (!currentChat || !socket) return;
+  const sendMessage = (msg) => {
+    if (!currentChat || !socket) return;
 
-  const tempMessage = {
-    id: Date.now(),
-    sender: user.id,
-    receiver: currentChat.id,
-    message: msg.message,
-    type: msg.type || "text",
-    createdAt: new Date(),
+    const tempMessage = {
+      id: Date.now(),
+      sender: user.id,
+      receiver: currentChat.id,
+      message: msg.message,
+      type: msg.type || "text",
+      createdAt: new Date(),
+    };
+
+    setMessages((prev) => [...prev, tempMessage]);
+
+    socket.emit("sendMessage", {
+      receiver: currentChat.id,
+      message: msg.message || "",
+      type: msg.type || "text",
+      mediaUrl: msg.mediaUrl || null,
+      replyTo: replyMessage,
+    });
+
+    setReplyMessage(null);
   };
-
-  setMessages((prev) => [...prev, tempMessage]);
-
-  socket.emit("sendMessage", {
-    receiver: currentChat.id,
-    message: msg.message,
-    type: msg.type || "text",
-    replyTo: replyMessage,
-  });
-
-  setReplyMessage(null);
-};
 
   /* ================= DELETE MESSAGE ================= */
 
@@ -132,7 +126,6 @@ const sendMessage = (msg) => {
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
-
       {/* ================= SIDEBAR ================= */}
 
       <Sidebar
@@ -145,7 +138,6 @@ const sendMessage = (msg) => {
       {/* ================= CHAT AREA ================= */}
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-
         {!currentChat ? (
           <div
             style={{
@@ -183,10 +175,7 @@ const sendMessage = (msg) => {
               openDeletePopup={setDeleteMsg}
             />
 
-            <MessageInput
-              sendMessage={sendMessage}
-              darkMode={darkMode}
-            />
+            <MessageInput sendMessage={sendMessage} darkMode={darkMode} />
           </>
         )}
       </div>
@@ -221,7 +210,6 @@ const sendMessage = (msg) => {
           onClose={() => setDeleteMsg(null)}
         />
       )}
-
     </div>
   );
 };
