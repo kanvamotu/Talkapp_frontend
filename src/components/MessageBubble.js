@@ -25,9 +25,11 @@ const MessageBubble = ({ msg, isMine, darkMode, onReply, onEdit, openDeletePopup
             : "#ffffff",
           color: darkMode ? "#e9edef" : "#111",
         }}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          openDeletePopup && openDeletePopup(e, msg);
+        
+          onContextMenu={(e) => {
+  e.preventDefault();
+  openDeletePopup(msg);
+
         }}
       >
         {msg?.reply_to && (
