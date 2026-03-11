@@ -17,9 +17,9 @@ const MessageList = ({ messages = [], userId, darkMode, openDeletePopup }) => {
     >
       {messages.map((msg) => (
         <MessageBubble
-          key={msg?.id || Math.random()}
+          key={msg?.id}
           msg={msg}
-          isMine={msg?.sender_id === userId}
+          isMine={msg?.sender === userId}   // ✅ FIX
           darkMode={darkMode}
           openDeletePopup={openDeletePopup}
         />
