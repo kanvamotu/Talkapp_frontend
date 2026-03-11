@@ -1,17 +1,35 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 
 const MessageInput = ({ sendMessage, darkMode }) => {
   const [text, setText] = useState("");
+  const fileRef = useRef();
 
   const handleSend = () => {
     if (!text.trim()) return;
 
-    sendMessage && sendMessage({
+    sendMessage({
       type: "text",
       message: text,
     });
 
     setText("");
+  };
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const type = file.type.startsWith("image")
+      ? "image"
+      : file.type.startsWith("video")
+      ? "video"
+      : "file";
+
+    sendMessage({
+      type,
+      file,
+      message: file.name,
+    });
   };
 
   return (
@@ -21,6 +39,28 @@ const MessageInput = ({ sendMessage, darkMode }) => {
         background: darkMode ? "#202c33" : "#fff",
       }}
     >
+      {/* Emoji Button */}
+      <button style={styles.iconBtn} title="Emoji">
+        😊
+      </button>
+
+      {/* File Upload */}
+      <button
+        style={styles.iconBtn}
+        title="Attach file"
+        onClick={() => fileRef.current.click()}
+      >
+        📎
+      </button>
+
+      <input
+        ref={fileRef}
+        type="file"
+        style={{ display: "none" }}
+        onChange={handleFile}
+      />
+
+      {/* Text Input */}
       <input
         type="text"
         value={text}
@@ -39,12 +79,18 @@ const MessageInput = ({ sendMessage, darkMode }) => {
         }}
       />
 
+      {/* Voice Button */}
+      <button style={styles.iconBtn} title="Voice message">
+        🎤
+      </button>
+
+      {/* Send Button */}
       <button
         style={styles.sendBtn}
         onClick={handleSend}
         disabled={!text.trim()}
       >
-        Send
+        ➤
       </button>
     </div>
   );
@@ -53,25 +99,33 @@ const MessageInput = ({ sendMessage, darkMode }) => {
 const styles = {
   container: {
     display: "flex",
+    alignItems: "center",
     gap: 8,
-    padding: "8px 16px",
+    padding: "10px 14px",
     borderTop: "1px solid #e5e7eb",
   },
 
   input: {
     flex: 1,
     padding: "10px 12px",
-    borderRadius: 8,
+    borderRadius: 20,
     border: "none",
     outline: "none",
   },
 
   sendBtn: {
-    padding: "10px 16px",
+    padding: "8px 14px",
     border: "none",
-    borderRadius: 8,
+    borderRadius: 20,
     background: "#2563EB",
     color: "#fff",
+    cursor: "pointer",
+  },
+
+  iconBtn: {
+    border: "none",
+    background: "transparent",
+    fontSize: 20,
     cursor: "pointer",
   },
 };

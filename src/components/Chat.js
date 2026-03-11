@@ -68,35 +68,55 @@ const Chat = ({ user, darkMode, socket }) => {
 
   /* ================= SOCKET RECEIVE MESSAGE ================= */
 
-  useEffect(() => {
-    if (!socket) return;
+useEffect(() => {
+  if (!socket) return;
 
-    socket.on("receiveMessage", (msg) => {
-      if (
-        msg.sender === currentChat?.id ||
-        msg.receiver === currentChat?.id
-      ) {
-        setMessages((prev) => [...prev, msg]);
-      }
-    });
+  const handleReceive = (msg) => {
 
-    return () => socket.off("receiveMessage");
-  }, [socket, currentChat]);
+    if (
+      (msg.sender === user.id && msg.receiver === currentChat?.id) ||
+      (msg.sender === currentChat?.id && msg.receiver === user.id)
+    ) {
+      setMessages((prev) => {
+        const exists = prev.find((m) => m.id === msg.id);
+        if (exists) return prev;
+        return [...prev, msg];
+      });
+    }
+
+  };
+
+  socket.on("receiveMessage", handleReceive);
+
+  return () => socket.off("receiveMessage", handleReceive);
+
+}, [socket, currentChat, user]);
 
   /* ================= SEND MESSAGE ================= */
 
-  const sendMessage = (msg) => {
-    if (!currentChat || !socket) return;
+const sendMessage = (msg) => {
+  if (!currentChat || !socket) return;
 
-    socket.emit("sendMessage", {
-      receiver: currentChat.id,
-      message: msg.message,
-      type: msg.type || "text",
-      replyTo: replyMessage,
-    });
-
-    setReplyMessage(null);
+  const tempMessage = {
+    id: Date.now(),
+    sender: user.id,
+    receiver: currentChat.id,
+    message: msg.message,
+    type: msg.type || "text",
+    createdAt: new Date(),
   };
+
+  setMessages((prev) => [...prev, tempMessage]);
+
+  socket.emit("sendMessage", {
+    receiver: currentChat.id,
+    message: msg.message,
+    type: msg.type || "text",
+    replyTo: replyMessage,
+  });
+
+  setReplyMessage(null);
+};
 
   /* ================= DELETE MESSAGE ================= */
 
@@ -186,7 +206,7 @@ const Chat = ({ user, darkMode, socket }) => {
 
       {showProfile && (
         <Profile
-          user={currentChat}
+          user={user}
           darkMode={darkMode}
           onClose={() => setShowProfile(false)}
         />
