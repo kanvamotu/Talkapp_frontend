@@ -67,40 +67,41 @@ const Chat = ({ user, darkMode, socket }) => {
   };
 
   /* ================= RECEIVE REAL TIME MESSAGE ================= */
-  useEffect(() => {
-    if (!socket) return;
+useEffect(() => {
+  if (!socket) return;
 
-    const handleReceive = (msg) => {
-      setMessages((prev) => {
-        // prevent duplicates
-        if (prev.some((m) => m.id === msg.id)) return prev;
+  const handleReceiveMessage = (msg) => {
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === msg.id)) return prev;
 
-        // only show if message belongs to current chat
-        if (
-          currentChat &&
-          ((msg.sender === user.id && msg.receiver === currentChat.id) ||
-            (msg.sender === currentChat.id && msg.receiver === user.id))
-        ) {
-          return [...prev, msg];
-        }
+      if (
+        currentChat &&
+        (
+          (msg.sender === user.id && msg.receiver === currentChat.id) ||
+          (msg.sender === currentChat.id && msg.receiver === user.id)
+        )
+      ) {
+        return [...prev, msg];
+      }
 
-        return prev;
-      });
-    };
+      return prev;
+    });
+  };
 
-    socket.on("receiveMessage", handleReceive);
+  socket.on("receiveMessage", handleReceiveMessage);
 
-    return () => {
-      socket.off("receiveMessage", handleReceive);
-    };
-  }, [socket, currentChat, user]);
+  return () => {
+    socket.off("receiveMessage", handleReceiveMessage);
+  };
+
+}, [socket, currentChat, user]);
 
   /* ================= SEND MESSAGE ================= */
   const sendMessage = (msg) => {
     if (!currentChat || !socket) return;
 
     const tempMessage = {
-      id: Date.now(),
+      id: `temp-${Date.now()}`,
       sender: user.id,
       receiver: currentChat.id,
       message: msg.message,
@@ -109,7 +110,7 @@ const Chat = ({ user, darkMode, socket }) => {
       replyTo: replyMessage,
     };
 
-    // show instantly
+    // optimistic UI update
     setMessages((prev) => [...prev, tempMessage]);
 
     socket.emit("sendMessage", {
@@ -141,6 +142,8 @@ const Chat = ({ user, darkMode, socket }) => {
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
+      
+      {/* SIDEBAR */}
       <Sidebar
         chats={chats}
         selectChat={selectChat}
@@ -148,6 +151,7 @@ const Chat = ({ user, darkMode, socket }) => {
         darkMode={darkMode}
       />
 
+      {/* CHAT AREA */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {!currentChat ? (
           <div
@@ -188,11 +192,15 @@ const Chat = ({ user, darkMode, socket }) => {
               openDeletePopup={setDeleteMsg}
             />
 
-            <MessageInput sendMessage={sendMessage} darkMode={darkMode} />
+            <MessageInput
+              sendMessage={sendMessage}
+              darkMode={darkMode}
+            />
           </>
         )}
       </div>
 
+      {/* ADD USER MODAL */}
       {showAddUser && (
         <AddUserModal
           users={[]}
@@ -202,6 +210,7 @@ const Chat = ({ user, darkMode, socket }) => {
         />
       )}
 
+      {/* PROFILE */}
       {showProfile && (
         <Profile
           user={user}
@@ -210,6 +219,7 @@ const Chat = ({ user, darkMode, socket }) => {
         />
       )}
 
+      {/* DELETE POPUP */}
       {deleteMsg && (
         <DeletePopup
           msg={deleteMsg}
@@ -217,6 +227,7 @@ const Chat = ({ user, darkMode, socket }) => {
           onClose={() => setDeleteMsg(null)}
         />
       )}
+
     </div>
   );
 };
