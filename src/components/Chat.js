@@ -19,30 +19,46 @@ const Chat = ({ user, darkMode, socket }) => {
 
   const API_URL = process.env.REACT_APP_BASE_URL;
 
+  /* ================= ENSURE SOCKET CONNECTED ================= */
+  useEffect(() => {
+    if (socket && !socket.connected) {
+      socket.connect();
+    }
+  }, [socket]);
+
   /* ================= FETCH USERS ================= */
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const res = await fetch(`${API_URL}/users`, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
         });
+
         const data = await res.json();
         setChats(data);
       } catch (err) {
         console.error("Error fetching users:", err);
       }
     };
+
     fetchUsers();
   }, [API_URL]);
 
   /* ================= SELECT CHAT ================= */
   const selectChat = async (chat) => {
     if (!chat) return;
+
     setCurrentChat(chat);
+
     try {
       const res = await fetch(`${API_URL}/messages/${user.id}/${chat.id}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("accessToken")}` },
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
       });
+
       const data = await res.json();
       setMessages(data);
     } catch (err) {
@@ -50,24 +66,33 @@ const Chat = ({ user, darkMode, socket }) => {
     }
   };
 
-  /* ================= SOCKET RECEIVE MESSAGE ================= */
+  /* ================= RECEIVE REAL TIME MESSAGE ================= */
   useEffect(() => {
     if (!socket) return;
 
     const handleReceive = (msg) => {
-      if (
-        (msg.sender === user.id && msg.receiver === currentChat?.id) ||
-        (msg.sender === currentChat?.id && msg.receiver === user.id)
-      ) {
-        setMessages((prev) => {
-          if (prev.find((m) => m.id === msg.id)) return prev;
+      setMessages((prev) => {
+        // prevent duplicates
+        if (prev.some((m) => m.id === msg.id)) return prev;
+
+        // only show if message belongs to current chat
+        if (
+          currentChat &&
+          ((msg.sender === user.id && msg.receiver === currentChat.id) ||
+            (msg.sender === currentChat.id && msg.receiver === user.id))
+        ) {
           return [...prev, msg];
-        });
-      }
+        }
+
+        return prev;
+      });
     };
 
     socket.on("receiveMessage", handleReceive);
-    return () => socket.off("receiveMessage", handleReceive);
+
+    return () => {
+      socket.off("receiveMessage", handleReceive);
+    };
   }, [socket, currentChat, user]);
 
   /* ================= SEND MESSAGE ================= */
@@ -84,9 +109,11 @@ const Chat = ({ user, darkMode, socket }) => {
       replyTo: replyMessage,
     };
 
+    // show instantly
     setMessages((prev) => [...prev, tempMessage]);
 
     socket.emit("sendMessage", {
+      sender: user.id,
       receiver: currentChat.id,
       message: msg.message || "",
       type: msg.type || "text",
@@ -100,7 +127,12 @@ const Chat = ({ user, darkMode, socket }) => {
   /* ================= DELETE MESSAGE ================= */
   const deleteMessage = (id) => {
     if (!socket) return;
-    socket.emit("deleteMessage", { messageId: id, type: "me" });
+
+    socket.emit("deleteMessage", {
+      messageId: id,
+      type: "me",
+    });
+
     setMessages((prev) => prev.filter((msg) => msg.id !== id));
   };
 
@@ -109,7 +141,12 @@ const Chat = ({ user, darkMode, socket }) => {
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
-      <Sidebar chats={chats} selectChat={selectChat} currentChat={currentChat} darkMode={darkMode} />
+      <Sidebar
+        chats={chats}
+        selectChat={selectChat}
+        currentChat={currentChat}
+        darkMode={darkMode}
+      />
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
         {!currentChat ? (
@@ -137,7 +174,11 @@ const Chat = ({ user, darkMode, socket }) => {
             />
 
             {replyMessage && (
-              <ReplyBar replyMessage={replyMessage} cancelReply={cancelReply} darkMode={darkMode} />
+              <ReplyBar
+                replyMessage={replyMessage}
+                cancelReply={cancelReply}
+                darkMode={darkMode}
+              />
             )}
 
             <MessageList
@@ -153,13 +194,28 @@ const Chat = ({ user, darkMode, socket }) => {
       </div>
 
       {showAddUser && (
-        <AddUserModal users={[]} addUser={() => {}} onClose={() => setShowAddUser(false)} darkMode={darkMode} />
+        <AddUserModal
+          users={[]}
+          addUser={() => {}}
+          onClose={() => setShowAddUser(false)}
+          darkMode={darkMode}
+        />
       )}
 
-      {showProfile && <Profile user={user} darkMode={darkMode} onClose={() => setShowProfile(false)} />}
+      {showProfile && (
+        <Profile
+          user={user}
+          darkMode={darkMode}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
 
       {deleteMsg && (
-        <DeletePopup msg={deleteMsg} onDelete={deleteMessage} onClose={() => setDeleteMsg(null)} />
+        <DeletePopup
+          msg={deleteMsg}
+          onDelete={deleteMessage}
+          onClose={() => setDeleteMsg(null)}
+        />
       )}
     </div>
   );
