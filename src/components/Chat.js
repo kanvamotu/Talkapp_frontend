@@ -67,34 +67,33 @@ const Chat = ({ user, darkMode, socket }) => {
   };
 
   /* ================= RECEIVE REAL TIME MESSAGE ================= */
-useEffect(() => {
-  if (!socket) return;
+  useEffect(() => {
+    if (!socket) return;
 
-  const handleReceiveMessage = (msg) => {
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === msg.id)) return prev;
+    const handleReceiveMessage = (msg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
 
-      if (
-        currentChat &&
-        (
-          (msg.sender === user.id && msg.receiver === currentChat.id) ||
-          (msg.sender === currentChat.id && msg.receiver === user.id)
-        )
-      ) {
-        return [...prev, msg];
-      }
+        if (
+          currentChat &&
+          ((String(msg.sender) === String(user.id) &&
+            String(msg.receiver) === String(currentChat.id)) ||
+            (String(msg.sender) === String(currentChat.id) &&
+              String(msg.receiver) === String(user.id)))
+        ) {
+          return [...prev, msg];
+        }
 
-      return prev;
-    });
-  };
+        return prev;
+      });
+    };
 
-  socket.on("receiveMessage", handleReceiveMessage);
+    socket.on("receiveMessage", handleReceiveMessage);
 
-  return () => {
-    socket.off("receiveMessage", handleReceiveMessage);
-  };
-
-}, [socket, currentChat, user]);
+    return () => {
+      socket.off("receiveMessage", handleReceiveMessage);
+    };
+  }, [socket, currentChat, user]);
 
   /* ================= SEND MESSAGE ================= */
   const sendMessage = (msg) => {
@@ -102,10 +101,11 @@ useEffect(() => {
 
     const tempMessage = {
       id: `temp-${Date.now()}`,
-      sender: user.id,
-      receiver: currentChat.id,
-      message: msg.message,
+      sender: String(user.id),
+      receiver: String(currentChat.id),
+      message: msg.message || "",
       type: msg.type || "text",
+      mediaUrl: msg.mediaUrl || null,
       createdAt: new Date(),
       replyTo: replyMessage,
     };
@@ -142,7 +142,6 @@ useEffect(() => {
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
-      
       {/* SIDEBAR */}
       <Sidebar
         chats={chats}
@@ -192,10 +191,7 @@ useEffect(() => {
               openDeletePopup={setDeleteMsg}
             />
 
-            <MessageInput
-              sendMessage={sendMessage}
-              darkMode={darkMode}
-            />
+            <MessageInput sendMessage={sendMessage} darkMode={darkMode} />
           </>
         )}
       </div>
@@ -227,7 +223,6 @@ useEffect(() => {
           onClose={() => setDeleteMsg(null)}
         />
       )}
-
     </div>
   );
 };

@@ -1,9 +1,20 @@
 import React from "react";
 
-const MessageBubble = ({ msg, isMine, darkMode, onReply, onEdit, openDeletePopup }) => {
+const MessageBubble = ({
+  msg,
+  isMine,
+  darkMode,
+  onReply,
+  onEdit,
+  openDeletePopup,
+}) => {
+  const API_URL = process.env.REACT_APP_BASE_URL;
 
   const time = msg?.createdAt
-    ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    ? new Date(msg.createdAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
     : "";
 
   return (
@@ -21,15 +32,13 @@ const MessageBubble = ({ msg, isMine, darkMode, onReply, onEdit, openDeletePopup
               ? "#005c4b"
               : "#DCFCE7"
             : darkMode
-            ? "#202c33"
-            : "#ffffff",
+              ? "#202c33"
+              : "#ffffff",
           color: darkMode ? "#e9edef" : "#111",
         }}
-        
-          onContextMenu={(e) => {
-  e.preventDefault();
-  openDeletePopup(msg);
-
+        onContextMenu={(e) => {
+          e.preventDefault();
+          openDeletePopup(msg);
         }}
       >
         {msg?.reply_to && (
@@ -48,7 +57,15 @@ const MessageBubble = ({ msg, isMine, darkMode, onReply, onEdit, openDeletePopup
         {msg?.type === "text" && <div style={styles.text}>{msg?.message}</div>}
 
         {msg?.type === "image" && (
-          <img src={msg?.mediaUrl} alt="img" style={styles.image} />
+          <img
+            src={
+              msg?.mediaUrl?.startsWith("http")
+                ? msg.mediaUrl
+                : `${API_URL}${msg.mediaUrl}`
+            }
+            alt="img"
+            style={styles.image}
+          />
         )}
 
         {msg?.type === "video" && (
@@ -57,11 +74,7 @@ const MessageBubble = ({ msg, isMine, darkMode, onReply, onEdit, openDeletePopup
           </video>
         )}
 
-        {msg?.type === "audio" && (
-          <audio controls>
-            <source src={msg?.mediaUrl} type="audio/mpeg" />
-          </audio>
-        )}
+        {msg?.type === "audio" && <audio controls src={msg?.mediaUrl}></audio>}
 
         <div style={styles.footer}>
           <span style={styles.time}>{time}</span>
