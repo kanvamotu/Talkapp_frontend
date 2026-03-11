@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import Sidebar from "./SideBar"; // make sure this matches exactly
+
+import React, { useState, useEffect } from "react";
+import Sidebar from "./SideBar";
 import ChatHeader from "./ChatHeader";
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
@@ -9,6 +10,7 @@ import Profile from "./Profile";
 import DeletePopup from "./deletePopup";
 
 const Chat = ({ user, darkMode, socket }) => {
+  
 
   const [currentChat, setCurrentChat] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -18,45 +20,53 @@ const Chat = ({ user, darkMode, socket }) => {
   const [showProfile, setShowProfile] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState(null);
 
-  // select chat from sidebar
+  // Select chat from sidebar
   const selectChat = (chat) => {
+    if (!chat) return;
     setCurrentChat(chat);
     setMessages(chat.messages || []);
   };
 
-  // send message
+  // Reset reply when switching chats
+  useEffect(() => {
+    setReplyMessage(null);
+  }, [currentChat]);
+
+  // Send message
   const sendMessage = (msg) => {
     if (!currentChat) return;
 
     const newMessage = {
       id: Date.now(),
-      sender_id: user.id,
-      receiver_id: currentChat.id,
+      sender_id: user?.id,
+      receiver_id: currentChat?.id,
       message: msg.message,
-      type: msg.type,
-      created_at: new Date()
+      type: msg.type || "text",
+      created_at: new Date(),
     };
 
+    // Update UI instantly
     setMessages((prev) => [...prev, newMessage]);
 
+    // Send to server
     if (socket) {
       socket.emit("send_message", newMessage);
     }
   };
 
-  // delete message
+  // Delete message
   const deleteMessage = (id) => {
-    setMessages((prev) => prev.filter((msg) => msg.id !== id));
+    setMessages((prev) => prev.filter((msg) => msg?.id !== id));
   };
 
-  // cancel reply
+  // Cancel reply
   const cancelReply = () => {
     setReplyMessage(null);
   };
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
-
+      
       {/* Sidebar */}
       <Sidebar
         selectChat={selectChat}
@@ -84,7 +94,7 @@ const Chat = ({ user, darkMode, socket }) => {
 
         <MessageList
           messages={messages}
-          userId={user.id}
+          userId={user?.id}
           darkMode={darkMode}
           openDeletePopup={setDeleteMsg}
         />
@@ -93,6 +103,7 @@ const Chat = ({ user, darkMode, socket }) => {
           sendMessage={sendMessage}
           darkMode={darkMode}
         />
+
       </div>
 
       {/* Add User Modal */}
@@ -105,7 +116,7 @@ const Chat = ({ user, darkMode, socket }) => {
         />
       )}
 
-      {/* Profile */}
+      {/* Profile Modal */}
       {showProfile && (
         <Profile
           user={currentChat}
@@ -122,9 +133,9 @@ const Chat = ({ user, darkMode, socket }) => {
           onClose={() => setDeleteMsg(null)}
         />
       )}
-
     </div>
   );
 };
 
 export default Chat;
+

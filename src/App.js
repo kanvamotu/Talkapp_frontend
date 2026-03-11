@@ -7,12 +7,14 @@ import { connectSocket } from "./socket";
 function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [user, setUser] = useState(null);
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     const accessToken = localStorage.getItem("accessToken");
-    const user = JSON.parse(localStorage.getItem("user"));
+    const storedUser = JSON.parse(localStorage.getItem("user"));
 
-    if (!accessToken || !user?.id) return;
+    if (!accessToken || !storedUser?.id) return;
 
     try {
       const payload = JSON.parse(atob(accessToken.split(".")[1]));
@@ -23,14 +25,20 @@ function App() {
         return;
       }
 
-      connectSocket(accessToken);
+      const s = connectSocket(accessToken);
+
+      setUser(storedUser);
+      setSocket(s);
       setLoggedIn(true);
+
     } catch {
       localStorage.clear();
     }
   }, []);
 
-  if (loggedIn) return <Chat />;
+  if (loggedIn) {
+    return <Chat user={user} socket={socket} darkMode={false} />;
+  }
 
   return showRegister ? (
     <Register switchToLogin={() => setShowRegister(false)} />
