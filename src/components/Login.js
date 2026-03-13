@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { connectSocket } from "../socket"; // make sure your socket function is imported
 
 const API_URL = process.env.REACT_APP_BASE_URL;
 
-const Login = ({ setLoggedIn, switchToRegister }) => {
+const Login = ({ setLoggedIn, setUser, setSocket, switchToRegister }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   const [pupilX, setPupilX] = useState(0);
   const [pupilY, setPupilY] = useState(0);
-
   const [isBlinking, setIsBlinking] = useState(false);
   const [isPasswordFocus, setIsPasswordFocus] = useState(false);
 
@@ -21,7 +21,6 @@ const Login = ({ setLoggedIn, switchToRegister }) => {
 
       const x = (e.clientX / window.innerWidth - 0.5) * 12;
       const y = (e.clientY / window.innerHeight - 0.5) * 8;
-
       const max = 10;
 
       setPupilX(Math.max(Math.min(x, max), -max));
@@ -29,7 +28,6 @@ const Login = ({ setLoggedIn, switchToRegister }) => {
     };
 
     window.addEventListener("mousemove", handleMouseMove);
-
     return () => window.removeEventListener("mousemove", handleMouseMove);
   }, [isPasswordFocus]);
 
@@ -43,17 +41,16 @@ const Login = ({ setLoggedIn, switchToRegister }) => {
     return () => clearInterval(blinkInterval);
   }, []);
 
-  /* 👀 EMAIL LOOK */
   const handleEmailChange = (e) => {
     setEmail(e.target.value);
     setPupilX(-6);
     setPupilY(-2);
   };
 
-  /* 🙈 PASSWORD FOCUS */
   const handlePasswordFocus = () => setIsPasswordFocus(true);
   const handlePasswordBlur = () => setIsPasswordFocus(false);
 
+  /* ✅ HANDLE LOGIN AND REDIRECT */
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -61,10 +58,17 @@ const Login = ({ setLoggedIn, switchToRegister }) => {
     try {
       const res = await axios.post(`${API_URL}/login`, { email, password });
 
+      // Save tokens & user
       localStorage.setItem("accessToken", res.data.accessToken);
       localStorage.setItem("refreshToken", res.data.refreshToken);
       localStorage.setItem("user", JSON.stringify(res.data.user));
 
+      // Initialize socket immediately
+      const s = connectSocket(res.data.accessToken);
+
+      // Update App state to redirect to Chat page
+      setUser(res.data.user);
+      setSocket(s);
       setLoggedIn(true);
     } catch {
       setError("Invalid email or password");
@@ -128,7 +132,6 @@ const Login = ({ setLoggedIn, switchToRegister }) => {
                 />
 
                 <circle cx={80 + pupilX} cy={50 + pupilY} r="7" fill="#000" />
-
                 <circle cx={76 + pupilX} cy={46 + pupilY} r="3" fill="#fff" />
               </>
             )}
@@ -194,7 +197,6 @@ const styles = {
     background: "linear-gradient(135deg,#667eea,#764ba2)",
     fontFamily: "Arial",
   },
-
   card: {
     background: "#fff",
     padding: "40px",
@@ -203,83 +205,18 @@ const styles = {
     width: "420px",
     textAlign: "center",
   },
-
-  eyeWrapper: {
-    marginBottom: "15px",
-  },
-
-  title: {
-    marginBottom: "5px",
-    fontSize: "28px",
-    fontWeight: "bold",
-  },
-
-  subtitle: {
-    marginBottom: "25px",
-    color: "#777",
-    fontSize: "14px",
-  },
-
-  form: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "15px",
-  },
-
-  input: {
-    padding: "12px",
-    borderRadius: "6px",
-    border: "1px solid #ddd",
-    fontSize: "14px",
-  },
-
-  passwordWrapper: {
-    position: "relative",
-    display: "flex",
-    alignItems: "center",
-  },
-
-  passwordInput: {
-    width: "100%",
-    padding: "12px",
-    paddingRight: "40px",
-    borderRadius: "6px",
-    border: "1px solid #ddd",
-    fontSize: "14px",
-  },
-
-  monkey: {
-    position: "absolute",
-    right: "10px",
-    fontSize: "20px",
-  },
-
-  button: {
-    padding: "12px",
-    borderRadius: "6px",
-    border: "none",
-    background: "#667eea",
-    color: "#fff",
-    fontSize: "16px",
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
-
-  error: {
-    color: "red",
-    fontSize: "14px",
-  },
-
-  registerText: {
-    marginTop: "20px",
-    fontSize: "14px",
-  },
-
-  registerLink: {
-    color: "#667eea",
-    fontWeight: "bold",
-    cursor: "pointer",
-  },
+  eyeWrapper: { marginBottom: "15px" },
+  title: { marginBottom: "5px", fontSize: "28px", fontWeight: "bold" },
+  subtitle: { marginBottom: "25px", color: "#777", fontSize: "14px" },
+  form: { display: "flex", flexDirection: "column", gap: "15px" },
+  input: { padding: "12px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "14px" },
+  passwordWrapper: { position: "relative", display: "flex", alignItems: "center" },
+  passwordInput: { width: "100%", padding: "12px", paddingRight: "40px", borderRadius: "6px", border: "1px solid #ddd", fontSize: "14px" },
+  monkey: { position: "absolute", right: "10px", fontSize: "20px" },
+  button: { padding: "12px", borderRadius: "6px", border: "none", background: "#667eea", color: "#fff", fontSize: "16px", fontWeight: "bold", cursor: "pointer" },
+  error: { color: "red", fontSize: "14px" },
+  registerText: { marginTop: "20px", fontSize: "14px" },
+  registerLink: { color: "#667eea", fontWeight: "bold", cursor: "pointer" },
 };
 
 export default Login;
