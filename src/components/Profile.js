@@ -9,6 +9,7 @@ const Profile = ({ user, onClose }) => {
     bio: user.bio || "",
     location: user.location || "",
     dob: user.dob || "",
+    social: user.social?.join(", ") || "",
   });
 
   const handleChange = (e) => {
@@ -16,8 +17,11 @@ const Profile = ({ user, onClose }) => {
   };
 
   const handleSave = () => {
-    // MOCK: Update user details locally (no backend change)
-    Object.assign(user, formData);
+    // Update the local user object (frontend only)
+    Object.assign(user, {
+      ...formData,
+      social: formData.social.split(",").map(s => s.trim())
+    });
     setIsEditing(false);
     alert("Profile updated locally!");
   };
@@ -42,7 +46,8 @@ const Profile = ({ user, onClose }) => {
               {user.phone && <div style={styles.detailItem}><strong>Phone:</strong> {user.phone}</div>}
               {user.bio && <div style={styles.detailItem}><strong>Bio:</strong> {user.bio}</div>}
               {user.location && <div style={styles.detailItem}><strong>Location:</strong> {user.location}</div>}
-              {user.dob && <div style={styles.detailItem}><strong>DOB:</strong> {user.dob}</div>}
+              {user.dob && <div style={styles.detailItem}><strong>DOB:</strong> {new Date(user.dob).toLocaleDateString()}</div>}
+              {user.social?.length > 0 && <div style={styles.detailItem}><strong>Social:</strong> {user.social.join(", ")}</div>}
             </div>
 
             <button style={styles.editButton} onClick={() => setIsEditing(true)}>Edit Profile</button>
@@ -70,6 +75,10 @@ const Profile = ({ user, onClose }) => {
                 <strong>DOB:</strong>
                 <input type="date" name="dob" value={formData.dob} onChange={handleChange} />
               </div>
+              <div style={styles.detailItem}>
+                <strong>Social (comma separated):</strong>
+                <input type="text" name="social" value={formData.social} onChange={handleChange} />
+              </div>
             </div>
 
             <button style={styles.saveButton} onClick={handleSave}>Save</button>
@@ -77,23 +86,15 @@ const Profile = ({ user, onClose }) => {
           </>
         )}
 
-        <div style={styles.logoutBox}>
-          <Logout />
-        </div>
+        <div style={styles.logoutBox}><Logout /></div>
       </div>
     </div>
   );
 };
 
 const styles = {
-  overlay: {
-    position: "fixed", top: 0, left: 0, width: "100%", height: "100%",
-    background: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 50
-  },
-  container: {
-    width: 360, background: "#fff", borderRadius: 16, padding: 25,
-    position: "relative", maxHeight: "90vh", overflowY: "auto",
-  },
+  overlay: { position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 50 },
+  container: { width: 360, background: "#fff", borderRadius: 16, padding: 25, position: "relative", maxHeight: "90vh", overflowY: "auto" },
   close: { position: "absolute", right: 15, top: 10, fontSize: 20, cursor: "pointer" },
   avatar: { width: 80, height: 80, borderRadius: "50%", background: "#2563EB", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 10px" },
   header: { textAlign: "center", marginBottom: 20 },
