@@ -44,6 +44,8 @@ function App() {
   ) : (
     <Login
       setLoggedIn={setLoggedIn}
+      setUser={setUser} // <-- add this
+      setSocket={setSocket} // <-- add this
       switchToRegister={() => setShowRegister(true)}
     />
   );
