@@ -10,6 +10,7 @@ import DeletePopup from "./deletePopup";
 
 const Chat = ({ user, darkMode, socket }) => {
   const [chats, setChats] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [currentChat, setCurrentChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [replyMessage, setReplyMessage] = useState(null);
@@ -20,13 +21,14 @@ const Chat = ({ user, darkMode, socket }) => {
 
   const API_URL = process.env.REACT_APP_BASE_URL;
 
-  /* ================= ENSURE SOCKET CONNECTED ================= */
+  /* ================= SOCKET CONNECT ================= */
   useEffect(() => {
     if (socket && !socket.connected) {
       socket.connect();
     }
   }, [socket]);
 
+  /* ================= ONLINE USERS ================= */
   useEffect(() => {
     if (!socket) return;
 
@@ -41,7 +43,7 @@ const Chat = ({ user, darkMode, socket }) => {
     };
   }, [socket]);
 
-  /* ================= FETCH USERS ================= */
+  /* ================= FETCH CHAT USERS ================= */
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -60,6 +62,26 @@ const Chat = ({ user, darkMode, socket }) => {
 
     fetchUsers();
   }, [API_URL, user.id]);
+
+  /* ================= FETCH ALL USERS (FOR ADD USER) ================= */
+  useEffect(() => {
+    const fetchAllUsers = async () => {
+      try {
+        const res = await fetch(`${API_URL}/users`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+          },
+        });
+
+        const data = await res.json();
+        setAllUsers(data);
+      } catch (err) {
+        console.error("Error fetching users:", err);
+      }
+    };
+
+    fetchAllUsers();
+  }, [API_URL]);
 
   /* ================= SELECT CHAT ================= */
   const selectChat = async (chat) => {
@@ -81,7 +103,7 @@ const Chat = ({ user, darkMode, socket }) => {
     }
   };
 
-  /* ================= RECEIVE REAL TIME MESSAGE ================= */
+  /* ================= RECEIVE MESSAGE ================= */
   useEffect(() => {
     if (!socket) return;
 
@@ -125,7 +147,6 @@ const Chat = ({ user, darkMode, socket }) => {
       replyTo: replyMessage,
     };
 
-    // optimistic UI update
     setMessages((prev) => [...prev, tempMessage]);
 
     socket.emit("sendMessage", {
@@ -140,6 +161,17 @@ const Chat = ({ user, darkMode, socket }) => {
     setReplyMessage(null);
   };
 
+  /* ================= ADD USER ================= */
+  const addUser = (newUser) => {
+    if (!newUser) return;
+
+    if (!chats.find((u) => u.id === newUser.id)) {
+      setChats((prev) => [...prev, newUser]);
+    }
+
+    setShowAddUser(false);
+  };
+
   /* ================= DELETE MESSAGE ================= */
   const deleteMessage = (id) => {
     if (!socket) return;
@@ -152,17 +184,19 @@ const Chat = ({ user, darkMode, socket }) => {
     setMessages((prev) => prev.filter((msg) => msg.id !== id));
   };
 
-  /* ================= CANCEL REPLY ================= */
   const cancelReply = () => setReplyMessage(null);
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
+      
       {/* SIDEBAR */}
       <Sidebar
         chats={chats}
         selectChat={selectChat}
         currentChat={currentChat}
         darkMode={darkMode}
+        openAddUser={() => setShowAddUser(true)}
+        openProfile={() => setShowProfile(true)}
       />
 
       {/* CHAT AREA */}
@@ -214,8 +248,8 @@ const Chat = ({ user, darkMode, socket }) => {
       {/* ADD USER MODAL */}
       {showAddUser && (
         <AddUserModal
-          users={[]}
-          addUser={() => {}}
+          users={allUsers}
+          addUser={addUser}
           onClose={() => setShowAddUser(false)}
           darkMode={darkMode}
         />

@@ -6,6 +6,7 @@ const Sidebar = ({
   darkMode,
   currentChat,
   openAddUser,
+  openProfile,
 }) => {
   return (
     <div
@@ -14,24 +15,39 @@ const Sidebar = ({
         background: darkMode ? "#202c33" : "#ffffff",
       }}
     >
-      {/* ADD USER BUTTON */}
-      <button onClick={openAddUser} style={styles.addBtn}>
-        ➕ Add User
-      </button>
+      {/* TOP BAR */}
+      <div style={styles.topBar}>
+        <button onClick={openProfile} style={styles.profileBtn}>
+          👤 My Profile
+        </button>
+
+        <button onClick={openAddUser} style={styles.addBtn}>
+          ➕ Add User
+        </button>
+      </div>
+
+      {/* CHAT LIST */}
       {chats.map((chat) => (
         <div
           key={chat.id}
           onClick={() => selectChat(chat)}
           style={{
             ...styles.chatRow,
-            background: currentChat?.id === chat.id ? "#3B82F6" : "transparent",
+            background:
+              currentChat?.id === chat.id
+                ? darkMode
+                  ? "#2a3942"
+                  : "#e0f2fe"
+                : "transparent",
             color: darkMode ? "#e9edef" : "#111",
           }}
         >
+          {/* AVATAR */}
           <div style={styles.avatar}>
             {chat.username?.charAt(0).toUpperCase()}
           </div>
 
+          {/* USER INFO */}
           <div>
             <div style={styles.username}>{chat.username}</div>
 
@@ -51,8 +67,39 @@ const styles = {
     borderRight: "1px solid #e5e7eb",
     height: "100vh",
     overflowY: "auto",
+    display: "flex",
+    flexDirection: "column",
   },
 
+  /* TOP BAR */
+  topBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: "10px",
+    borderBottom: "1px solid #e5e7eb",
+  },
+
+  profileBtn: {
+    padding: "6px 10px",
+    background: "#22c55e",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontWeight: 500,
+  },
+
+  addBtn: {
+    padding: "6px 10px",
+    background: "#2563EB",
+    color: "#fff",
+    border: "none",
+    borderRadius: 6,
+    cursor: "pointer",
+    fontWeight: 500,
+  },
+
+  /* CHAT ROW */
   chatRow: {
     display: "flex",
     padding: "12px 16px",
@@ -76,18 +123,6 @@ const styles = {
   username: {
     fontWeight: 600,
   },
-
-  addBtn: {
-  width: "90%",
-  margin: "10px",
-  padding: "8px",
-  background: "#2563EB",
-  color: "#fff",
-  border: "none",
-  borderRadius: 6,
-  cursor: "pointer",
-  fontWeight: 500,
-},
 
   lastMsg: {
     fontSize: 12,
