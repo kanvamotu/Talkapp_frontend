@@ -24,43 +24,33 @@ const Chat = ({ user, darkMode, socket }) => {
 
   const API_URL = process.env.REACT_APP_BASE_URL;
 
-  /* ================= MOBILE SCREEN DETECTION ================= */
+  /* MOBILE SCREEN DETECTION */
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handleResize);
-
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  /* ================= SOCKET CONNECT ================= */
+  /* SOCKET CONNECT */
 
   useEffect(() => {
-    if (socket && !socket.connected) {
-      socket.connect();
-    }
+    if (socket && !socket.connected) socket.connect();
   }, [socket]);
 
-  /* ================= ONLINE USERS ================= */
+  /* ONLINE USERS */
 
   useEffect(() => {
     if (!socket) return;
 
-    const handleOnlineUsers = (users) => {
-      setOnlineUsers(users);
-    };
+    const handleOnlineUsers = (users) => setOnlineUsers(users);
 
     socket.on("onlineUsers", handleOnlineUsers);
 
-    return () => {
-      socket.off("onlineUsers", handleOnlineUsers);
-    };
+    return () => socket.off("onlineUsers", handleOnlineUsers);
   }, [socket]);
 
-  /* ================= FETCH CHAT USERS ================= */
+  /* FETCH CHAT USERS */
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -81,7 +71,7 @@ const Chat = ({ user, darkMode, socket }) => {
     fetchUsers();
   }, [API_URL, user.id]);
 
-  /* ================= FETCH ALL USERS ================= */
+  /* FETCH ALL USERS */
 
   useEffect(() => {
     const fetchAllUsers = async () => {
@@ -102,16 +92,14 @@ const Chat = ({ user, darkMode, socket }) => {
     fetchAllUsers();
   }, [API_URL]);
 
-  /* ================= SELECT CHAT ================= */
+  /* SELECT CHAT */
 
   const selectChat = async (chat) => {
     if (!chat) return;
 
     setCurrentChat(chat);
 
-    if (isMobile) {
-      setMobileSidebar(false);
-    }
+    if (isMobile) setMobileSidebar(false);
 
     try {
       const res = await fetch(`${API_URL}/messages/${user.id}/${chat.id}`, {
@@ -127,7 +115,7 @@ const Chat = ({ user, darkMode, socket }) => {
     }
   };
 
-  /* ================= RECEIVE MESSAGE ================= */
+  /* RECEIVE MESSAGE */
 
   useEffect(() => {
     if (!socket) return;
@@ -152,28 +140,13 @@ const Chat = ({ user, darkMode, socket }) => {
 
     socket.on("receiveMessage", handleReceiveMessage);
 
-    return () => {
-      socket.off("receiveMessage", handleReceiveMessage);
-    };
+    return () => socket.off("receiveMessage", handleReceiveMessage);
   }, [socket, currentChat, user]);
 
-  /* ================= SEND MESSAGE ================= */
+  /* SEND MESSAGE (FIXED) */
 
   const sendMessage = (msg) => {
     if (!currentChat || !socket) return;
-
-    const tempMessage = {
-      id: `temp-${Date.now()}`,
-      sender: String(user.id),
-      receiver: String(currentChat.id),
-      message: msg.message || "",
-      type: msg.type || "text",
-      mediaUrl: msg.mediaUrl || null,
-      createdAt: new Date(),
-      replyTo: replyMessage,
-    };
-
-    setMessages((prev) => [...prev, tempMessage]);
 
     socket.emit("sendMessage", {
       sender: user.id,
@@ -187,7 +160,7 @@ const Chat = ({ user, darkMode, socket }) => {
     setReplyMessage(null);
   };
 
-  /* ================= ADD USER ================= */
+  /* ADD USER */
 
   const addUser = (newUser) => {
     if (!newUser) return;
@@ -199,7 +172,7 @@ const Chat = ({ user, darkMode, socket }) => {
     setShowAddUser(false);
   };
 
-  /* ================= DELETE MESSAGE ================= */
+  /* DELETE MESSAGE */
 
   const deleteMessage = (id) => {
     if (!socket) return;
@@ -216,7 +189,7 @@ const Chat = ({ user, darkMode, socket }) => {
 
   return (
     <div style={{ display: "flex", height: "100vh", position: "relative" }}>
-      
+
       {/* SIDEBAR */}
 
       {(mobileSidebar || !isMobile) && (
@@ -225,6 +198,8 @@ const Chat = ({ user, darkMode, socket }) => {
             position: isMobile ? "absolute" : "relative",
             zIndex: 20,
             height: "100%",
+            width: isMobile ? "80%" : 300,
+            background: darkMode ? "#202c33" : "#fff"
           }}
         >
           <Sidebar
@@ -238,28 +213,39 @@ const Chat = ({ user, darkMode, socket }) => {
         </div>
       )}
 
+      {/* MOBILE OVERLAY */}
+
+      {isMobile && mobileSidebar && (
+        <div
+          onClick={() => setMobileSidebar(false)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0,0,0,0.3)",
+            zIndex: 10
+          }}
+        />
+      )}
+
       {/* CHAT AREA */}
 
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-        
-        {/* MOBILE MENU */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+        }}
+      >
 
         {isMobile && (
-          <div
-            style={{
-              padding: 10,
-              borderBottom: "1px solid #ddd",
-              background: darkMode ? "#202c33" : "#fff",
-            }}
-          >
+          <div style={{ padding: 10 }}>
             <button
               onClick={() => setMobileSidebar(!mobileSidebar)}
-              style={{
-                fontSize: 22,
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-              }}
+              style={{ fontSize: 22, border: "none", background: "none" }}
             >
               ☰
             </button>
@@ -267,16 +253,7 @@ const Chat = ({ user, darkMode, socket }) => {
         )}
 
         {!currentChat ? (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              fontSize: 18,
-              color: "#64748B",
-            }}
-          >
+          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
             Select a user to start chatting
           </div>
         ) : (
@@ -286,8 +263,6 @@ const Chat = ({ user, darkMode, socket }) => {
               darkMode={darkMode}
               onlineUsers={onlineUsers}
               openProfile={() => setShowProfile(true)}
-              startCall={() => {}}
-              startVideoCall={() => {}}
             />
 
             {replyMessage && (
@@ -336,6 +311,7 @@ const Chat = ({ user, darkMode, socket }) => {
           onClose={() => setDeleteMsg(null)}
         />
       )}
+
     </div>
   );
 };
