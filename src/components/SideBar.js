@@ -1,6 +1,12 @@
 import React from "react";
 
-const Sidebar = ({ chats = [], selectChat, darkMode, currentChat }) => {
+const Sidebar = ({
+  chats = [],
+  selectChat,
+  darkMode,
+  currentChat,
+  openAddUser,
+}) => {
   return (
     <div
       style={{
@@ -8,14 +14,17 @@ const Sidebar = ({ chats = [], selectChat, darkMode, currentChat }) => {
         background: darkMode ? "#202c33" : "#ffffff",
       }}
     >
+      {/* ADD USER BUTTON */}
+      <button onClick={openAddUser} style={styles.addBtn}>
+        ➕ Add User
+      </button>
       {chats.map((chat) => (
         <div
           key={chat.id}
           onClick={() => selectChat(chat)}
           style={{
             ...styles.chatRow,
-            background:
-              currentChat?.id === chat.id ? "#3B82F6" : "transparent",
+            background: currentChat?.id === chat.id ? "#3B82F6" : "transparent",
             color: darkMode ? "#e9edef" : "#111",
           }}
         >
@@ -67,6 +76,18 @@ const styles = {
   username: {
     fontWeight: 600,
   },
+
+  addBtn: {
+  width: "90%",
+  margin: "10px",
+  padding: "8px",
+  background: "#2563EB",
+  color: "#fff",
+  border: "none",
+  borderRadius: 6,
+  cursor: "pointer",
+  fontWeight: 500,
+},
 
   lastMsg: {
     fontSize: 12,

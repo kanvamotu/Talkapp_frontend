@@ -16,6 +16,7 @@ const Chat = ({ user, darkMode, socket }) => {
   const [showAddUser, setShowAddUser] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
 
   const API_URL = process.env.REACT_APP_BASE_URL;
 
@@ -26,11 +27,25 @@ const Chat = ({ user, darkMode, socket }) => {
     }
   }, [socket]);
 
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOnlineUsers = (users) => {
+      setOnlineUsers(users);
+    };
+
+    socket.on("onlineUsers", handleOnlineUsers);
+
+    return () => {
+      socket.off("onlineUsers", handleOnlineUsers);
+    };
+  }, [socket]);
+
   /* ================= FETCH USERS ================= */
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch(`${API_URL}/users`, {
+        const res = await fetch(`${API_URL}/chat-users/${user.id}`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
           },
@@ -44,7 +59,7 @@ const Chat = ({ user, darkMode, socket }) => {
     };
 
     fetchUsers();
-  }, [API_URL]);
+  }, [API_URL, user.id]);
 
   /* ================= SELECT CHAT ================= */
   const selectChat = async (chat) => {
@@ -170,7 +185,7 @@ const Chat = ({ user, darkMode, socket }) => {
             <ChatHeader
               receiver={currentChat}
               darkMode={darkMode}
-              onlineUsers={[]}
+              onlineUsers={onlineUsers}
               openProfile={() => setShowProfile(true)}
               startCall={() => {}}
               startVideoCall={() => {}}
