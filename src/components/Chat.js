@@ -19,9 +19,25 @@ const Chat = ({ user, darkMode, socket }) => {
   const [deleteMsg, setDeleteMsg] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
 
+  const [mobileSidebar, setMobileSidebar] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
   const API_URL = process.env.REACT_APP_BASE_URL;
 
+  /* ================= MOBILE SCREEN DETECTION ================= */
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   /* ================= SOCKET CONNECT ================= */
+
   useEffect(() => {
     if (socket && !socket.connected) {
       socket.connect();
@@ -29,6 +45,7 @@ const Chat = ({ user, darkMode, socket }) => {
   }, [socket]);
 
   /* ================= ONLINE USERS ================= */
+
   useEffect(() => {
     if (!socket) return;
 
@@ -44,6 +61,7 @@ const Chat = ({ user, darkMode, socket }) => {
   }, [socket]);
 
   /* ================= FETCH CHAT USERS ================= */
+
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -63,7 +81,8 @@ const Chat = ({ user, darkMode, socket }) => {
     fetchUsers();
   }, [API_URL, user.id]);
 
-  /* ================= FETCH ALL USERS (FOR ADD USER) ================= */
+  /* ================= FETCH ALL USERS ================= */
+
   useEffect(() => {
     const fetchAllUsers = async () => {
       try {
@@ -84,10 +103,15 @@ const Chat = ({ user, darkMode, socket }) => {
   }, [API_URL]);
 
   /* ================= SELECT CHAT ================= */
+
   const selectChat = async (chat) => {
     if (!chat) return;
 
     setCurrentChat(chat);
+
+    if (isMobile) {
+      setMobileSidebar(false);
+    }
 
     try {
       const res = await fetch(`${API_URL}/messages/${user.id}/${chat.id}`, {
@@ -104,6 +128,7 @@ const Chat = ({ user, darkMode, socket }) => {
   };
 
   /* ================= RECEIVE MESSAGE ================= */
+
   useEffect(() => {
     if (!socket) return;
 
@@ -133,6 +158,7 @@ const Chat = ({ user, darkMode, socket }) => {
   }, [socket, currentChat, user]);
 
   /* ================= SEND MESSAGE ================= */
+
   const sendMessage = (msg) => {
     if (!currentChat || !socket) return;
 
@@ -162,6 +188,7 @@ const Chat = ({ user, darkMode, socket }) => {
   };
 
   /* ================= ADD USER ================= */
+
   const addUser = (newUser) => {
     if (!newUser) return;
 
@@ -173,6 +200,7 @@ const Chat = ({ user, darkMode, socket }) => {
   };
 
   /* ================= DELETE MESSAGE ================= */
+
   const deleteMessage = (id) => {
     if (!socket) return;
 
@@ -187,20 +215,57 @@ const Chat = ({ user, darkMode, socket }) => {
   const cancelReply = () => setReplyMessage(null);
 
   return (
-    <div style={{ display: "flex", height: "100vh" }}>
+    <div style={{ display: "flex", height: "100vh", position: "relative" }}>
       
       {/* SIDEBAR */}
-      <Sidebar
-        chats={chats}
-        selectChat={selectChat}
-        currentChat={currentChat}
-        darkMode={darkMode}
-        openAddUser={() => setShowAddUser(true)}
-        openProfile={() => setShowProfile(true)}
-      />
+
+      {(mobileSidebar || !isMobile) && (
+        <div
+          style={{
+            position: isMobile ? "absolute" : "relative",
+            zIndex: 20,
+            height: "100%",
+          }}
+        >
+          <Sidebar
+            chats={chats}
+            selectChat={selectChat}
+            currentChat={currentChat}
+            darkMode={darkMode}
+            openAddUser={() => setShowAddUser(true)}
+            openProfile={() => setShowProfile(true)}
+          />
+        </div>
+      )}
 
       {/* CHAT AREA */}
+
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        
+        {/* MOBILE MENU */}
+
+        {isMobile && (
+          <div
+            style={{
+              padding: 10,
+              borderBottom: "1px solid #ddd",
+              background: darkMode ? "#202c33" : "#fff",
+            }}
+          >
+            <button
+              onClick={() => setMobileSidebar(!mobileSidebar)}
+              style={{
+                fontSize: 22,
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+              }}
+            >
+              ☰
+            </button>
+          </div>
+        )}
+
         {!currentChat ? (
           <div
             style={{
@@ -245,7 +310,8 @@ const Chat = ({ user, darkMode, socket }) => {
         )}
       </div>
 
-      {/* ADD USER MODAL */}
+      {/* MODALS */}
+
       {showAddUser && (
         <AddUserModal
           users={allUsers}
@@ -255,7 +321,6 @@ const Chat = ({ user, darkMode, socket }) => {
         />
       )}
 
-      {/* PROFILE */}
       {showProfile && (
         <Profile
           user={user}
@@ -264,7 +329,6 @@ const Chat = ({ user, darkMode, socket }) => {
         />
       )}
 
-      {/* DELETE POPUP */}
       {deleteMsg && (
         <DeletePopup
           msg={deleteMsg}
