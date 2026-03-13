@@ -19,12 +19,11 @@ const Chat = ({ user, darkMode, socket }) => {
   const [deleteMsg, setDeleteMsg] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
 
-  const [mobileSidebar, setMobileSidebar] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const API_URL = process.env.REACT_APP_BASE_URL;
 
-  /* MOBILE SCREEN DETECTION */
+  /* SCREEN DETECTION */
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -99,8 +98,6 @@ const Chat = ({ user, darkMode, socket }) => {
 
     setCurrentChat(chat);
 
-    if (isMobile) setMobileSidebar(false);
-
     try {
       const res = await fetch(`${API_URL}/messages/${user.id}/${chat.id}`, {
         headers: {
@@ -143,7 +140,7 @@ const Chat = ({ user, darkMode, socket }) => {
     return () => socket.off("receiveMessage", handleReceiveMessage);
   }, [socket, currentChat, user]);
 
-  /* SEND MESSAGE (FIXED) */
+  /* SEND MESSAGE */
 
   const sendMessage = (msg) => {
     if (!currentChat || !socket) return;
@@ -188,45 +185,18 @@ const Chat = ({ user, darkMode, socket }) => {
   const cancelReply = () => setReplyMessage(null);
 
   return (
-    <div style={{ display: "flex", height: "100vh", position: "relative" }}>
-
+    <div style={{ display: "flex", height: "100vh" }}>
+      
       {/* SIDEBAR */}
 
-      {(mobileSidebar || !isMobile) && (
-        <div
-          style={{
-            position: isMobile ? "absolute" : "relative",
-            zIndex: 20,
-            height: "100%",
-            width: isMobile ? "80%" : 300,
-            background: darkMode ? "#202c33" : "#fff"
-          }}
-        >
-          <Sidebar
-            chats={chats}
-            selectChat={selectChat}
-            currentChat={currentChat}
-            darkMode={darkMode}
-            openAddUser={() => setShowAddUser(true)}
-            openProfile={() => setShowProfile(true)}
-          />
-        </div>
-      )}
-
-      {/* MOBILE OVERLAY */}
-
-      {isMobile && mobileSidebar && (
-        <div
-          onClick={() => setMobileSidebar(false)}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            background: "rgba(0,0,0,0.3)",
-            zIndex: 10
-          }}
+      {(!currentChat || !isMobile) && (
+        <Sidebar
+          chats={chats}
+          selectChat={selectChat}
+          currentChat={currentChat}
+          darkMode={darkMode}
+          openAddUser={() => setShowAddUser(true)}
+          openProfile={() => setShowProfile(true)}
         />
       )}
 
@@ -237,23 +207,19 @@ const Chat = ({ user, darkMode, socket }) => {
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          width: "100%",
         }}
       >
-
-        {isMobile && (
-          <div style={{ padding: 10 }}>
-            <button
-              onClick={() => setMobileSidebar(!mobileSidebar)}
-              style={{ fontSize: 22, border: "none", background: "none" }}
-            >
-              ☰
-            </button>
-          </div>
-        )}
-
         {!currentChat ? (
-          <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center" }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              fontSize: 18,
+              color: "#64748B",
+            }}
+          >
             Select a user to start chatting
           </div>
         ) : (
@@ -263,6 +229,7 @@ const Chat = ({ user, darkMode, socket }) => {
               darkMode={darkMode}
               onlineUsers={onlineUsers}
               openProfile={() => setShowProfile(true)}
+              goBack={() => setCurrentChat(null)}
             />
 
             {replyMessage && (
@@ -311,7 +278,6 @@ const Chat = ({ user, darkMode, socket }) => {
           onClose={() => setDeleteMsg(null)}
         />
       )}
-
     </div>
   );
 };

@@ -30,13 +30,12 @@ function App() {
       setUser(storedUser);
       setSocket(s);
       setLoggedIn(true);
-
     } catch {
       localStorage.clear();
     }
   }, []);
 
-  if (loggedIn) {
+  if (loggedIn && user && socket) {
     return <Chat user={user} socket={socket} darkMode={false} />;
   }
 
