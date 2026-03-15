@@ -18,6 +18,7 @@ const Chat = ({ user, darkMode, socket }) => {
   const [showProfile, setShowProfile] = useState(false);
   const [deleteMsg, setDeleteMsg] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
+  const [unreadCounts, setUnreadCounts] = useState({});
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -98,6 +99,17 @@ const Chat = ({ user, darkMode, socket }) => {
 
     setCurrentChat(chat);
 
+    setUnreadCounts((prev) => ({
+      ...prev,
+      [chat.id]: 0,
+    }));
+
+    if (socket) {
+      socket.emit("markSeen", {
+        senderId: chat.id,
+      });
+    }
+
     try {
       const res = await fetch(`${API_URL}/messages/${user.id}/${chat.id}`, {
         headers: {
@@ -118,6 +130,14 @@ const Chat = ({ user, darkMode, socket }) => {
     if (!socket) return;
 
     const handleReceiveMessage = (msg) => {
+      // IF CHAT NOT OPEN → INCREASE UNREAD
+      if (!currentChat || String(msg.sender) !== String(currentChat.id)) {
+        setUnreadCounts((prev) => ({
+          ...prev,
+          [msg.sender]: (prev[msg.sender] || 0) + 1,
+        }));
+      }
+
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
 
@@ -139,6 +159,24 @@ const Chat = ({ user, darkMode, socket }) => {
 
     return () => socket.off("receiveMessage", handleReceiveMessage);
   }, [socket, currentChat, user]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleSeen = ({ senderId }) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.sender === user.id && msg.receiver === senderId
+            ? { ...msg, status: "seen" }
+            : msg,
+        ),
+      );
+    };
+
+    socket.on("messagesSeen", handleSeen);
+
+    return () => socket.off("messagesSeen", handleSeen);
+  }, [socket, user]);
 
   /* SEND MESSAGE */
 
@@ -186,7 +224,6 @@ const Chat = ({ user, darkMode, socket }) => {
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
-      
       {/* SIDEBAR */}
 
       {(!currentChat || !isMobile) && (
@@ -195,6 +232,7 @@ const Chat = ({ user, darkMode, socket }) => {
           selectChat={selectChat}
           currentChat={currentChat}
           darkMode={darkMode}
+          unreadCounts={unreadCounts}
           openAddUser={() => setShowAddUser(true)}
           openProfile={() => setShowProfile(true)}
         />

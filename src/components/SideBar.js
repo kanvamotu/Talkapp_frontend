@@ -5,6 +5,7 @@ const Sidebar = ({
   selectChat,
   darkMode,
   currentChat,
+  unreadCounts = {},
   openAddUser,
   openProfile
 }) => {
@@ -16,7 +17,6 @@ const Sidebar = ({
         color: darkMode ? "#e9edef" : "#111"
       }}
     >
-
       {/* TOP BAR */}
       <div style={styles.topBar}>
         <button onClick={openProfile} style={styles.profileBtn}>
@@ -28,12 +28,10 @@ const Sidebar = ({
         </button>
       </div>
 
-      {/* USER LIST */}
+      {/* CHAT LIST */}
       <div style={styles.chatList}>
         {chats.length === 0 && (
-          <div style={styles.empty}>
-            No chats yet
-          </div>
+          <div style={styles.empty}>No chats yet</div>
         )}
 
         {chats.map((chat) => {
@@ -59,14 +57,18 @@ const Sidebar = ({
 
               {/* USER INFO */}
               <div style={styles.userInfo}>
-                <div style={styles.username}>
-                  {chat.username}
-                </div>
-
+                <div style={styles.username}>{chat.username}</div>
                 <div style={styles.lastMsg}>
                   {chat.lastMessage || "No messages yet"}
                 </div>
               </div>
+
+              {/* UNREAD BADGE */}
+              {unreadCounts?.[chat.id] > 0 && (
+                <div style={styles.badge}>
+                  {unreadCounts[chat.id]}
+                </div>
+              )}
             </div>
           );
         })}
@@ -78,10 +80,10 @@ const Sidebar = ({
 const styles = {
   container: {
     width: 300,
-    borderRight: "1px solid #e5e7eb",
     height: "100vh",
     display: "flex",
-    flexDirection: "column"
+    flexDirection: "column",
+    borderRight: "1px solid #e5e7eb"
   },
 
   /* TOP BAR */
@@ -149,7 +151,8 @@ const styles = {
 
   userInfo: {
     display: "flex",
-    flexDirection: "column"
+    flexDirection: "column",
+    flex: 1
   },
 
   username: {
@@ -160,8 +163,16 @@ const styles = {
   lastMsg: {
     fontSize: 12,
     color: "#64748B"
+  },
+
+  badge: {
+    background: "#22c55e",
+    color: "#fff",
+    borderRadius: 20,
+    padding: "3px 8px",
+    fontSize: 12,
+    fontWeight: "bold"
   }
 };
 
 export default Sidebar;
-
