@@ -49,7 +49,7 @@ const Call = ({ socket, callData, setCallData }) => {
         });
       }
     },
-    [socket]
+    [socket],
   );
 
   /* -------------------- CREATE PEER -------------------- */
@@ -59,7 +59,11 @@ const Call = ({ socket, callData, setCallData }) => {
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
       ],
     });
 
@@ -93,15 +97,13 @@ const Call = ({ socket, callData, setCallData }) => {
 
     socket.on("callAccepted", async ({ answer }) => {
       await peerRef.current.setRemoteDescription(
-        new RTCSessionDescription(answer)
+        new RTCSessionDescription(answer),
       );
     });
 
     socket.on("iceCandidate", async ({ candidate }) => {
       if (candidate) {
-        await peerRef.current.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
+        await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
       }
     });
 
@@ -119,9 +121,7 @@ const Call = ({ socket, callData, setCallData }) => {
     const pc = peerRef.current;
     if (!pc) return;
 
-    await pc.setRemoteDescription(
-      new RTCSessionDescription(callData.offer)
-    );
+    await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);

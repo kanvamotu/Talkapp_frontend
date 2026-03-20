@@ -7,6 +7,7 @@ import ReplyBar from "./ReplyBar";
 import AddUserModal from "./AddUserModal";
 import Profile from "./Profile";
 import DeletePopup from "./deletePopup";
+import Call from "./Call";
 
 const Chat = ({ user, darkMode, socket }) => {
   const [chats, setChats] = useState([]);
@@ -19,6 +20,7 @@ const Chat = ({ user, darkMode, socket }) => {
   const [deleteMsg, setDeleteMsg] = useState(null);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [unreadCounts, setUnreadCounts] = useState({});
+  const [callData, setCallData] = useState(null);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -70,6 +72,64 @@ const Chat = ({ user, darkMode, socket }) => {
 
     fetchUsers();
   }, [API_URL, user.id]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleIncomingCall = ({ from, offer }) => {
+      setCallData({
+        type: "incoming",
+        userId: from,
+        offer,
+      });
+    };
+
+    socket.on("incomingCall", handleIncomingCall);
+
+    return () => socket.off("incomingCall", handleIncomingCall);
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleCallRejected = () => {
+      alert("❌ Call Rejected");
+      setCallData(null);
+    };
+
+    const handleUserBusy = () => {
+      alert("📞 User is Busy");
+      setCallData(null);
+    };
+
+    const handleUserOffline = () => {
+      alert("⚠️ User is Offline");
+      setCallData(null);
+    };
+
+    const handleCallTimeout = () => {
+      alert("⏳ No Answer");
+      setCallData(null);
+    };
+
+    const handleCallEnded = () => {
+      setCallData(null);
+    };
+
+    socket.on("callRejected", handleCallRejected);
+    socket.on("userBusy", handleUserBusy);
+    socket.on("userOffline", handleUserOffline);
+    socket.on("callTimeout", handleCallTimeout);
+    socket.on("callEnded", handleCallEnded);
+
+    return () => {
+      socket.off("callRejected", handleCallRejected);
+      socket.off("userBusy", handleUserBusy);
+      socket.off("userOffline", handleUserOffline);
+      socket.off("callTimeout", handleCallTimeout);
+      socket.off("callEnded", handleCallEnded);
+    };
+  }, [socket]);
 
   /* FETCH ALL USERS */
 
@@ -195,6 +255,26 @@ const Chat = ({ user, darkMode, socket }) => {
     setReplyMessage(null);
   };
 
+  const startCall = () => {
+    if (!currentChat) return;
+
+    setCallData({
+      type: "outgoing",
+      userId: currentChat.id,
+      video: false,
+    });
+  };
+
+  const startVideoCall = () => {
+    if (!currentChat) return;
+
+    setCallData({
+      type: "outgoing",
+      userId: currentChat.id,
+      video: callData.video,
+    });
+  };
+
   /* ADD USER */
 
   const addUser = (newUser) => {
@@ -268,6 +348,8 @@ const Chat = ({ user, darkMode, socket }) => {
               onlineUsers={onlineUsers}
               openProfile={() => setShowProfile(true)}
               goBack={() => setCurrentChat(null)}
+              startCall={startCall}
+              startVideoCall={startVideoCall}
             />
 
             {replyMessage && (
@@ -315,6 +397,10 @@ const Chat = ({ user, darkMode, socket }) => {
           onDelete={deleteMessage}
           onClose={() => setDeleteMsg(null)}
         />
+      )}
+
+      {callData && (
+        <Call socket={socket} callData={callData} setCallData={setCallData} />
       )}
     </div>
   );
