@@ -25,7 +25,7 @@ const Call = ({ socket, callData, setCallData }) => {
   const startMedia = useCallback(
     async (pc, callData) => {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: callData.video,
         audio: true,
       });
 

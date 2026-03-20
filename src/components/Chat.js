@@ -271,7 +271,7 @@ const Chat = ({ user, darkMode, socket }) => {
     setCallData({
       type: "outgoing",
       userId: currentChat.id,
-      video: callData.video,
+      video: true,
     });
   };
 
