@@ -144,21 +144,91 @@ const Call = ({ socket, callData, setCallData }) => {
 
   if (!callData) return null;
 
-  return (
-    <div className="call-container">
-      <video ref={remoteVideoRef} autoPlay playsInline />
-      <video ref={localVideoRef} autoPlay playsInline muted />
+return (
+  <div style={styles.container}>
+    
+    {/* Remote Video (Full Screen) */}
+    <video
+      ref={remoteVideoRef}
+      autoPlay
+      playsInline
+      style={styles.remoteVideo}   // ✅ APPLY THIS
+    />
 
-      {callData.type === "incoming" && (
-        <div>
-          <button onClick={acceptCall}>Accept</button>
-          <button onClick={rejectCall}>Reject</button>
-        </div>
-      )}
+    {/* Local Video (Small Box) */}
+    <video
+      ref={localVideoRef}
+      autoPlay
+      playsInline
+      muted
+      style={styles.localVideo}   // ✅ APPLY THIS
+    />
 
-      <button onClick={endCall}>End Call</button>
+    {/* Incoming Call Buttons */}
+    {callData.type === "incoming" && (
+      <div style={styles.controls}>   {/* ✅ APPLY */}
+        <button onClick={acceptCall}>Accept</button>
+        <button onClick={rejectCall}>Reject</button>
+      </div>
+    )}
+
+    {/* End Call Button */}
+    <div style={styles.controls}>
+      <button onClick={endCall} style={styles.endBtn}>
+        End Call
+      </button>
     </div>
-  );
+
+  </div>
+);
 };
 
 export default Call;
+
+
+
+const styles = {
+  container: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    backgroundColor: "black",
+    zIndex: 9999,
+  },
+
+  remoteVideo: {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+  },
+
+  localVideo: {
+    position: "absolute",
+    bottom: 20,
+    right: 20,
+    width: "100px",
+    height: "140px",
+    borderRadius: "10px",
+    border: "2px solid white",
+    objectFit: "cover",
+  },
+
+  controls: {
+    position: "absolute",
+    bottom: 30,
+    width: "100%",
+    display: "flex",
+    justifyContent: "center",
+    gap: "20px",
+  },
+
+  endBtn: {
+    padding: "12px 20px",
+    backgroundColor: "red",
+    color: "white",
+    border: "none",
+    borderRadius: "10px",
+  },
+};
