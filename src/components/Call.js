@@ -24,10 +24,8 @@ const Call = ({ socket, callData, setCallData }) => {
       localStreamRef.current = null;
     }
 
-    if (ringtoneRef.current) {
-      ringtoneRef.current.pause();
-      ringtoneRef.current.currentTime = 0;
-    }
+    ringtoneRef.current?.pause();
+    if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
 
     setCallData(null);
   }, [setCallData]);
@@ -60,43 +58,44 @@ const Call = ({ socket, callData, setCallData }) => {
   }, [callData]);
 
   /* ---------------- START MEDIA ---------------- */
-  const startMedia = useCallback(
-    async (pc, data) => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: data.video,
-          audio: true,
-        });
+  const startMedia = useCallback(async (pc, data) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: data.video,
+        audio: true,
+      });
 
-        localStreamRef.current = stream;
+      localStreamRef.current = stream;
 
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-        }
-
-        stream.getTracks().forEach((track) => {
-          pc.addTrack(track, stream);
-        });
-
-        if (data.type === "outgoing") {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-
-          socket.emit("callUser", {
-            to: data.userId,
-            offer,
-          });
-        }
-      } catch (err) {
-        console.error("Media error:", err);
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.muted = true;
+        localVideoRef.current.play().catch(() => {});
       }
-    },
-    [socket],
-  );
+
+      stream.getTracks().forEach((track) => {
+        pc.addTrack(track, stream);
+      });
+
+      if (data.type === "outgoing") {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        socket.emit("callUser", {
+          to: data.userId,
+          offer,
+        });
+      }
+    } catch (err) {
+      console.error("Media error:", err);
+    }
+  }, [socket]);
 
   /* ---------------- CREATE PEER ---------------- */
   useEffect(() => {
     if (!callData) return;
+
+    iceQueueRef.current = [];
 
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -120,101 +119,89 @@ const Call = ({ socket, callData, setCallData }) => {
       }
     };
 
-pc.ontrack = (e) => {
-  console.log("✅ Remote stream received");
-
-  if (remoteVideoRef.current && e.streams[0]) {
-    remoteVideoRef.current.srcObject = e.streams[0];
-  }
-};
-
-    pc.onconnectionstatechange = () => {
-      console.log("Connection:", pc.connectionState);
+    // ✅ FIXED ontrack
+    pc.ontrack = (event) => {
+      if (remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+      }
     };
 
-    startMedia(pc, callData);
+    if (callData.type === "outgoing") {
+      startMedia(pc, callData);
+    }
 
-    return () => {};
-  }, [callData, socket, startMedia]);
+    return () => cleanupCall();
+  }, [callData, socket, startMedia, cleanupCall]);
 
   /* ---------------- SOCKET EVENTS ---------------- */
   useEffect(() => {
     if (!socket) return;
 
     const handleAccepted = async ({ answer }) => {
-      try {
-        const pc = peerRef.current;
-        if (!pc) return;
-
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
-
-        // ✅ FLUSH ICE
-        for (let c of iceQueueRef.current) {
-          await pc.addIceCandidate(new RTCIceCandidate(c));
-        }
-        iceQueueRef.current = [];
-
-        setCallData((p) => ({ ...p, type: "ongoing" }));
-      } catch (e) {
-        console.error(e);
-      }
-    };
-
-    const handleICE = async ({ candidate }) => {
-      if (!candidate) return;
-
       const pc = peerRef.current;
       if (!pc) return;
 
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      } catch (e) {
+        console.error("Remote desc error", e);
+      }
+
+      for (let c of iceQueueRef.current) {
+        await pc.addIceCandidate(new RTCIceCandidate(c));
+      }
+      iceQueueRef.current = [];
+
+      setCallData((p) => ({ ...p, type: "ongoing" }));
+    };
+
+    const handleICE = async ({ candidate }) => {
+      const pc = peerRef.current;
+      if (!pc || !candidate) return;
+
       if (pc.remoteDescription) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.error("Error adding ICE:", err);
-        }
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } else {
-        iceQueueRef.current.push(candidate); // ✅ store
+        iceQueueRef.current.push(candidate);
       }
     };
 
     socket.on("callAccepted", handleAccepted);
     socket.on("iceCandidate", handleICE);
     socket.on("callEnded", cleanupCall);
+    socket.on("callRejected", cleanupCall); // ✅ added
 
     return () => {
       socket.off("callAccepted", handleAccepted);
       socket.off("iceCandidate", handleICE);
       socket.off("callEnded", cleanupCall);
+      socket.off("callRejected", cleanupCall);
     };
   }, [socket, cleanupCall, setCallData]);
 
-  /* ---------------- CONTROLS ---------------- */
-  const toggleMute = () => {
-    localStreamRef.current?.getAudioTracks().forEach((t) => {
-      t.enabled = !isMuted;
-    });
-    setIsMuted(!isMuted);
-  };
-
-  const toggleCamera = () => {
-    localStreamRef.current?.getVideoTracks().forEach((t) => {
-      t.enabled = !isCameraOff;
-    });
-    setIsCameraOff(!isCameraOff);
-  };
-
-  /* ---------------- ACTIONS ---------------- */
+  /* ---------------- ACCEPT CALL ---------------- */
   const acceptCall = async () => {
     const pc = peerRef.current;
     if (!pc) return;
 
-    await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
 
-    // ✅ FLUSH ICE
-    for (let c of iceQueueRef.current) {
-      await pc.addIceCandidate(new RTCIceCandidate(c));
+    localStreamRef.current = stream;
+
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream;
+      localVideoRef.current.muted = true;
+      localVideoRef.current.play().catch(() => {});
     }
-    iceQueueRef.current = [];
+
+    stream.getTracks().forEach((track) => {
+      pc.addTrack(track, stream);
+    });
+
+    await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -223,6 +210,11 @@ pc.ontrack = (e) => {
       to: callData.userId,
       answer,
     });
+
+    for (let c of iceQueueRef.current) {
+      await pc.addIceCandidate(new RTCIceCandidate(c));
+    }
+    iceQueueRef.current = [];
 
     setCallData((p) => ({ ...p, type: "ongoing" }));
   };
@@ -237,16 +229,34 @@ pc.ontrack = (e) => {
     cleanupCall();
   };
 
+  /* ---------------- CONTROLS ---------------- */
+  const toggleMute = () => {
+    const newMuted = !isMuted;
+
+    localStreamRef.current?.getAudioTracks().forEach((t) => {
+      t.enabled = !newMuted;
+    });
+
+    setIsMuted(newMuted);
+  };
+
+  const toggleCamera = () => {
+    const newCam = !isCameraOff;
+
+    localStreamRef.current?.getVideoTracks().forEach((t) => {
+      t.enabled = !newCam;
+    });
+
+    setIsCameraOff(newCam);
+  };
+
   if (!callData) return null;
 
   return (
     <div style={isMinimized ? styles.minimized : styles.full}>
       <audio ref={ringtoneRef} loop src="/ringtone.mp3" />
 
-      {/* Remote */}
       <video ref={remoteVideoRef} autoPlay playsInline style={styles.remote} />
-
-      {/* Local */}
       <video
         ref={localVideoRef}
         autoPlay
@@ -255,7 +265,6 @@ pc.ontrack = (e) => {
         style={styles.local}
       />
 
-      {/* Controls */}
       <div style={styles.controls}>
         {callData.type === "incoming" ? (
           <div style={styles.popup}>
