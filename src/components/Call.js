@@ -16,6 +16,7 @@ const Call = ({ socket, callData, setCallData }) => {
 
   /* ---------------- TIMER ---------------- */
   const startTimer = useCallback(() => {
+    if (timerRef.current) return;
     timerRef.current = setInterval(() => {
       setTime((t) => t + 1);
     }, 1000);
@@ -23,6 +24,7 @@ const Call = ({ socket, callData, setCallData }) => {
 
   const stopTimer = useCallback(() => {
     clearInterval(timerRef.current);
+    timerRef.current = null;
     setTime(0);
   }, []);
 
@@ -77,8 +79,10 @@ const Call = ({ socket, callData, setCallData }) => {
       localRef.current.muted = true;
     }
 
-    stream.getTracks().forEach((t) => {
-      peerRef.current.addTrack(t, stream);
+    if (!peerRef.current) return;
+
+    stream.getTracks().forEach((track) => {
+      peerRef.current.addTrack(track, stream);
     });
   }, []);
 
@@ -96,7 +100,6 @@ const Call = ({ socket, callData, setCallData }) => {
     if (ringtone.current) ringtone.current.currentTime = 0;
 
     stopTimer();
-
     setCallData(null);
   }, [setCallData, stopTimer]);
 
@@ -202,16 +205,19 @@ const Call = ({ socket, callData, setCallData }) => {
       }
     };
 
+    const handleEnd = () => cleanup();
+    const handleReject = () => cleanup();
+
     socket.on("callAccepted", handleAccepted);
     socket.on("iceCandidate", handleICE);
-    socket.on("callEnded", cleanup);
-    socket.on("callRejected", cleanup);
+    socket.on("callEnded", handleEnd);
+    socket.on("callRejected", handleReject);
 
     return () => {
       socket.off("callAccepted", handleAccepted);
       socket.off("iceCandidate", handleICE);
-      socket.off("callEnded", cleanup);
-      socket.off("callRejected", cleanup);
+      socket.off("callEnded", handleEnd);
+      socket.off("callRejected", handleReject);
     };
   }, [socket, cleanup, startTimer, setCallData]);
 
@@ -280,6 +286,7 @@ const Call = ({ socket, callData, setCallData }) => {
 
 export default Call;
 
+/* ---------------- STYLES ---------------- */
 const styles = {
   full: { position: "fixed", inset: 0, background: "black" },
   min: {
