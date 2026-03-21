@@ -6,6 +6,7 @@ const Call = ({ socket, callData, setCallData }) => {
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
   const ringtoneRef = useRef(null);
+  const iceQueueRef = useRef([]);
 
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
@@ -59,36 +60,39 @@ const Call = ({ socket, callData, setCallData }) => {
   }, [callData]);
 
   /* ---------------- START MEDIA ---------------- */
-  const startMedia = useCallback(async (pc, data) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: data.video,
-        audio: true,
-      });
-
-      localStreamRef.current = stream;
-
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
-      stream.getTracks().forEach((track) => {
-        pc.addTrack(track, stream);
-      });
-
-      if (data.type === "outgoing") {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        socket.emit("callUser", {
-          to: data.userId,
-          offer,
+  const startMedia = useCallback(
+    async (pc, data) => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: data.video,
+          audio: true,
         });
+
+        localStreamRef.current = stream;
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+
+        stream.getTracks().forEach((track) => {
+          pc.addTrack(track, stream);
+        });
+
+        if (data.type === "outgoing") {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          socket.emit("callUser", {
+            to: data.userId,
+            offer,
+          });
+        }
+      } catch (err) {
+        console.error("Media error:", err);
       }
-    } catch (err) {
-      console.error("Media error:", err);
-    }
-  }, [socket]);
+    },
+    [socket],
+  );
 
   /* ---------------- CREATE PEER ---------------- */
   useEffect(() => {
@@ -116,11 +120,13 @@ const Call = ({ socket, callData, setCallData }) => {
       }
     };
 
-    pc.ontrack = (e) => {
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = e.streams[0];
-      }
-    };
+pc.ontrack = (e) => {
+  console.log("✅ Remote stream received");
+
+  if (remoteVideoRef.current && e.streams[0]) {
+    remoteVideoRef.current.srcObject = e.streams[0];
+  }
+};
 
     pc.onconnectionstatechange = () => {
       console.log("Connection:", pc.connectionState);
@@ -128,9 +134,7 @@ const Call = ({ socket, callData, setCallData }) => {
 
     startMedia(pc, callData);
 
-    return () => {
-      if (peerRef.current) peerRef.current.close();
-    };
+    return () => {};
   }, [callData, socket, startMedia]);
 
   /* ---------------- SOCKET EVENTS ---------------- */
@@ -139,9 +143,17 @@ const Call = ({ socket, callData, setCallData }) => {
 
     const handleAccepted = async ({ answer }) => {
       try {
-        await peerRef.current.setRemoteDescription(
-          new RTCSessionDescription(answer)
-        );
+        const pc = peerRef.current;
+        if (!pc) return;
+
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+        // ✅ FLUSH ICE
+        for (let c of iceQueueRef.current) {
+          await pc.addIceCandidate(new RTCIceCandidate(c));
+        }
+        iceQueueRef.current = [];
+
         setCallData((p) => ({ ...p, type: "ongoing" }));
       } catch (e) {
         console.error(e);
@@ -149,13 +161,19 @@ const Call = ({ socket, callData, setCallData }) => {
     };
 
     const handleICE = async ({ candidate }) => {
-      if (
-        candidate &&
-        peerRef.current?.remoteDescription
-      ) {
-        await peerRef.current.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
+      if (!candidate) return;
+
+      const pc = peerRef.current;
+      if (!pc) return;
+
+      if (pc.remoteDescription) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+          console.error("Error adding ICE:", err);
+        }
+      } else {
+        iceQueueRef.current.push(candidate); // ✅ store
       }
     };
 
@@ -190,9 +208,13 @@ const Call = ({ socket, callData, setCallData }) => {
     const pc = peerRef.current;
     if (!pc) return;
 
-    await pc.setRemoteDescription(
-      new RTCSessionDescription(callData.offer)
-    );
+    await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+
+    // ✅ FLUSH ICE
+    for (let c of iceQueueRef.current) {
+      await pc.addIceCandidate(new RTCIceCandidate(c));
+    }
+    iceQueueRef.current = [];
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -225,7 +247,13 @@ const Call = ({ socket, callData, setCallData }) => {
       <video ref={remoteVideoRef} autoPlay playsInline style={styles.remote} />
 
       {/* Local */}
-      <video ref={localVideoRef} autoPlay playsInline muted style={styles.local} />
+      <video
+        ref={localVideoRef}
+        autoPlay
+        playsInline
+        muted
+        style={styles.local}
+      />
 
       {/* Controls */}
       <div style={styles.controls}>
@@ -233,8 +261,12 @@ const Call = ({ socket, callData, setCallData }) => {
           <div style={styles.popup}>
             <h3>Incoming Call</h3>
             <div style={styles.row}>
-              <button style={styles.accept} onClick={acceptCall}>Accept</button>
-              <button style={styles.reject} onClick={rejectCall}>Reject</button>
+              <button style={styles.accept} onClick={acceptCall}>
+                Accept
+              </button>
+              <button style={styles.reject} onClick={rejectCall}>
+                Reject
+              </button>
             </div>
           </div>
         ) : (
