@@ -168,7 +168,7 @@ const Call = ({ socket, callData, setCallData }) => {
       socket.off("iceCandidate", handleICE);
       socket.off("callEnded", cleanupCall);
     };
-  }, [socket, cleanupCall]);
+  }, [socket, cleanupCall, setCallData]);
 
   /* ---------------- CONTROLS ---------------- */
   const toggleMute = () => {
