@@ -1,102 +1,39 @@
-import React, { useEffect, useRef, useCallback, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 
 const Call = ({ socket, callData, setCallData }) => {
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
+  const localRef = useRef(null);
+  const remoteRef = useRef(null);
   const peerRef = useRef(null);
-  const localStreamRef = useRef(null);
-  const ringtoneRef = useRef(null);
-  const iceQueueRef = useRef([]);
+  const streamRef = useRef(null);
+  const iceQueue = useRef([]);
+  const ringtone = useRef(null);
+  const timerRef = useRef(null);
 
+  const [time, setTime] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
-  const [isCameraOff, setIsCameraOff] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isCamOff, setIsCamOff] = useState(false);
+  const [minimized, setMinimized] = useState(false);
 
-  /* ---------------- CLEANUP ---------------- */
-  const cleanupCall = useCallback(() => {
-    if (peerRef.current) {
-      peerRef.current.close();
-      peerRef.current = null;
-    }
+  /* ---------------- TIMER ---------------- */
+  const startTimer = useCallback(() => {
+    timerRef.current = setInterval(() => {
+      setTime((t) => t + 1);
+    }, 1000);
+  }, []);
 
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = null;
-    }
+  const stopTimer = useCallback(() => {
+    clearInterval(timerRef.current);
+    setTime(0);
+  }, []);
 
-    ringtoneRef.current?.pause();
-    if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
+  const formatTime = () => {
+    const m = String(Math.floor(time / 60)).padStart(2, "0");
+    const s = String(time % 60).padStart(2, "0");
+    return `${m}:${s}`;
+  };
 
-    setCallData(null);
-  }, [setCallData]);
-
-  /* ---------------- INCOMING CALL ---------------- */
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleIncomingCall = (data) => {
-      setCallData({
-        type: "incoming",
-        userId: data.from,
-        offer: data.offer,
-        video: true,
-      });
-    };
-
-    socket.on("incomingCall", handleIncomingCall);
-    return () => socket.off("incomingCall", handleIncomingCall);
-  }, [socket, setCallData]);
-
-  /* ---------------- RINGTONE ---------------- */
-  useEffect(() => {
-    if (callData?.type === "incoming") {
-      ringtoneRef.current?.play().catch(() => {});
-    } else {
-      ringtoneRef.current?.pause();
-      if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
-    }
-  }, [callData]);
-
-  /* ---------------- START MEDIA ---------------- */
-  const startMedia = useCallback(async (pc, data) => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: data.video,
-        audio: true,
-      });
-
-      localStreamRef.current = stream;
-
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.muted = true;
-        localVideoRef.current.play().catch(() => {});
-      }
-
-      stream.getTracks().forEach((track) => {
-        pc.addTrack(track, stream);
-      });
-
-      if (data.type === "outgoing") {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        socket.emit("callUser", {
-          to: data.userId,
-          offer,
-        });
-      }
-    } catch (err) {
-      console.error("Media error:", err);
-    }
-  }, [socket]);
-
-  /* ---------------- CREATE PEER ---------------- */
-  useEffect(() => {
-    if (!callData) return;
-
-    iceQueueRef.current = [];
-
+  /* ---------------- PEER ---------------- */
+  const createPeer = useCallback(() => {
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -108,10 +45,8 @@ const Call = ({ socket, callData, setCallData }) => {
       ],
     });
 
-    peerRef.current = pc;
-
     pc.onicecandidate = (e) => {
-      if (e.candidate) {
+      if (e.candidate && callData?.userId) {
         socket.emit("iceCandidate", {
           to: callData.userId,
           candidate: e.candidate,
@@ -119,179 +54,223 @@ const Call = ({ socket, callData, setCallData }) => {
       }
     };
 
-    // ✅ FIXED ontrack
-    pc.ontrack = (event) => {
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = event.streams[0];
+    pc.ontrack = (e) => {
+      if (remoteRef.current) {
+        remoteRef.current.srcObject = e.streams[0];
       }
     };
 
-    if (callData.type === "outgoing") {
-      startMedia(pc, callData);
-    }
+    return pc;
+  }, [socket, callData?.userId]);
 
-    return () => cleanupCall();
-  }, [callData, socket, startMedia, cleanupCall]);
-
-  /* ---------------- SOCKET EVENTS ---------------- */
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleAccepted = async ({ answer }) => {
-      const pc = peerRef.current;
-      if (!pc) return;
-
-      try {
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
-      } catch (e) {
-        console.error("Remote desc error", e);
-      }
-
-      for (let c of iceQueueRef.current) {
-        await pc.addIceCandidate(new RTCIceCandidate(c));
-      }
-      iceQueueRef.current = [];
-
-      setCallData((p) => ({ ...p, type: "ongoing" }));
-    };
-
-    const handleICE = async ({ candidate }) => {
-      const pc = peerRef.current;
-      if (!pc || !candidate) return;
-
-      if (pc.remoteDescription) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
-      } else {
-        iceQueueRef.current.push(candidate);
-      }
-    };
-
-    socket.on("callAccepted", handleAccepted);
-    socket.on("iceCandidate", handleICE);
-    socket.on("callEnded", cleanupCall);
-    socket.on("callRejected", cleanupCall); // ✅ added
-
-    return () => {
-      socket.off("callAccepted", handleAccepted);
-      socket.off("iceCandidate", handleICE);
-      socket.off("callEnded", cleanupCall);
-      socket.off("callRejected", cleanupCall);
-    };
-  }, [socket, cleanupCall, setCallData]);
-
-  /* ---------------- ACCEPT CALL ---------------- */
-  const acceptCall = async () => {
-    const pc = peerRef.current;
-    if (!pc) return;
-
+  /* ---------------- MEDIA ---------------- */
+  const startMedia = useCallback(async (video = true) => {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: true,
+      video,
       audio: true,
     });
 
-    localStreamRef.current = stream;
+    streamRef.current = stream;
 
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = stream;
-      localVideoRef.current.muted = true;
-      localVideoRef.current.play().catch(() => {});
+    if (localRef.current) {
+      localRef.current.srcObject = stream;
+      localRef.current.muted = true;
     }
 
-    stream.getTracks().forEach((track) => {
-      pc.addTrack(track, stream);
+    stream.getTracks().forEach((t) => {
+      peerRef.current.addTrack(t, stream);
     });
+  }, []);
 
-    await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+  /* ---------------- CLEANUP ---------------- */
+  const cleanup = useCallback(() => {
+    peerRef.current?.close();
+    peerRef.current = null;
 
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+
+    iceQueue.current = [];
+
+    ringtone.current?.pause();
+    if (ringtone.current) ringtone.current.currentTime = 0;
+
+    stopTimer();
+
+    setCallData(null);
+  }, [setCallData, stopTimer]);
+
+  /* ---------------- INCOMING ---------------- */
+  useEffect(() => {
+    if (!socket) return;
+
+    const handler = ({ from, offer }) => {
+      setCallData({
+        type: "incoming",
+        userId: from,
+        offer,
+        video: true,
+      });
+    };
+
+    socket.on("incomingCall", handler);
+    return () => socket.off("incomingCall", handler);
+  }, [socket, setCallData]);
+
+  /* ---------------- RINGTONE ---------------- */
+  useEffect(() => {
+    if (callData?.type === "incoming") {
+      ringtone.current?.play().catch(() => {});
+    } else {
+      ringtone.current?.pause();
+    }
+  }, [callData]);
+
+  /* ---------------- OUTGOING ---------------- */
+  useEffect(() => {
+    if (!callData || callData.type !== "outgoing") return;
+
+    peerRef.current = createPeer();
+
+    (async () => {
+      await startMedia(callData.video);
+
+      const offer = await peerRef.current.createOffer();
+      await peerRef.current.setLocalDescription(offer);
+
+      socket.emit("callUser", {
+        to: callData.userId,
+        offer,
+      });
+    })();
+  }, [callData, createPeer, startMedia, socket]);
+
+  /* ---------------- ACCEPT ---------------- */
+  const acceptCall = async () => {
+    peerRef.current = createPeer();
+
+    await startMedia(true);
+
+    await peerRef.current.setRemoteDescription(
+      new RTCSessionDescription(callData.offer)
+    );
+
+    const answer = await peerRef.current.createAnswer();
+    await peerRef.current.setLocalDescription(answer);
 
     socket.emit("acceptCall", {
       to: callData.userId,
       answer,
     });
 
-    for (let c of iceQueueRef.current) {
-      await pc.addIceCandidate(new RTCIceCandidate(c));
+    for (let c of iceQueue.current) {
+      await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
     }
-    iceQueueRef.current = [];
+    iceQueue.current = [];
 
     setCallData((p) => ({ ...p, type: "ongoing" }));
+    startTimer();
+  };
+
+  /* ---------------- SOCKET ---------------- */
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleAccepted = async ({ answer }) => {
+      await peerRef.current.setRemoteDescription(
+        new RTCSessionDescription(answer)
+      );
+
+      for (let c of iceQueue.current) {
+        await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
+      }
+      iceQueue.current = [];
+
+      setCallData((p) => ({ ...p, type: "ongoing" }));
+      startTimer();
+    };
+
+    const handleICE = async ({ candidate }) => {
+      if (!peerRef.current) return;
+
+      if (peerRef.current.remoteDescription) {
+        await peerRef.current.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
+      } else {
+        iceQueue.current.push(candidate);
+      }
+    };
+
+    socket.on("callAccepted", handleAccepted);
+    socket.on("iceCandidate", handleICE);
+    socket.on("callEnded", cleanup);
+    socket.on("callRejected", cleanup);
+
+    return () => {
+      socket.off("callAccepted", handleAccepted);
+      socket.off("iceCandidate", handleICE);
+      socket.off("callEnded", cleanup);
+      socket.off("callRejected", cleanup);
+    };
+  }, [socket, cleanup, startTimer, setCallData]);
+
+  /* ---------------- ACTIONS ---------------- */
+  const endCall = () => {
+    socket.emit("endCall", { to: callData.userId });
+    cleanup();
   };
 
   const rejectCall = () => {
     socket.emit("rejectCall", { to: callData.userId });
-    cleanupCall();
+    cleanup();
   };
 
-  const endCall = () => {
-    socket.emit("endCall", { to: callData.userId });
-    cleanupCall();
-  };
-
-  /* ---------------- CONTROLS ---------------- */
   const toggleMute = () => {
-    const newMuted = !isMuted;
-
-    localStreamRef.current?.getAudioTracks().forEach((t) => {
-      t.enabled = !newMuted;
+    streamRef.current?.getAudioTracks().forEach((t) => {
+      t.enabled = !t.enabled;
     });
-
-    setIsMuted(newMuted);
+    setIsMuted((p) => !p);
   };
 
   const toggleCamera = () => {
-    const newCam = !isCameraOff;
-
-    localStreamRef.current?.getVideoTracks().forEach((t) => {
-      t.enabled = !newCam;
+    streamRef.current?.getVideoTracks().forEach((t) => {
+      t.enabled = !t.enabled;
     });
-
-    setIsCameraOff(newCam);
+    setIsCamOff((p) => !p);
   };
 
   if (!callData) return null;
 
   return (
-    <div style={isMinimized ? styles.minimized : styles.full}>
-      <audio ref={ringtoneRef} loop src="/ringtone.mp3" />
+    <div style={minimized ? styles.min : styles.full}>
+      <audio ref={ringtone} loop src="/ringtone.mp3" />
 
-      <video ref={remoteVideoRef} autoPlay playsInline style={styles.remote} />
-      <video
-        ref={localVideoRef}
-        autoPlay
-        playsInline
-        muted
-        style={styles.local}
-      />
+      <video ref={remoteRef} autoPlay playsInline style={styles.remote} />
+      <video ref={localRef} autoPlay playsInline muted style={styles.local} />
+
+      <div style={styles.top}>
+        {callData.type === "ongoing" && <span>{formatTime()}</span>}
+      </div>
 
       <div style={styles.controls}>
         {callData.type === "incoming" ? (
-          <div style={styles.popup}>
-            <h3>Incoming Call</h3>
-            <div style={styles.row}>
-              <button style={styles.accept} onClick={acceptCall}>
-                Accept
-              </button>
-              <button style={styles.reject} onClick={rejectCall}>
-                Reject
-              </button>
-            </div>
-          </div>
+          <>
+            <button onClick={acceptCall}>Accept</button>
+            <button onClick={rejectCall}>Reject</button>
+          </>
         ) : (
           <>
             <button onClick={toggleMute}>
-              {isMuted ? "Unmute 🎤" : "Mute 🎤"}
+              {isMuted ? "Unmute" : "Mute"}
             </button>
             <button onClick={toggleCamera}>
-              {isCameraOff ? "Camera On 📷" : "Camera Off 📷"}
+              {isCamOff ? "Cam On" : "Cam Off"}
             </button>
-            <button onClick={() => setIsMinimized(!isMinimized)}>
-              {isMinimized ? "⬆️" : "⬇️"}
+            <button onClick={() => setMinimized(!minimized)}>
+              {minimized ? "⬆️" : "⬇️"}
             </button>
-            <button style={styles.end} onClick={endCall}>
-              End
-            </button>
+            <button onClick={endCall}>End</button>
           </>
         )}
       </div>
@@ -301,89 +280,36 @@ const Call = ({ socket, callData, setCallData }) => {
 
 export default Call;
 
-/* ---------------- STYLES ---------------- */
 const styles = {
-  full: {
+  full: { position: "fixed", inset: 0, background: "black" },
+  min: {
     position: "fixed",
-    inset: 0,
+    bottom: 20,
+    right: 20,
+    width: 200,
+    height: 260,
     background: "black",
-    zIndex: 9999,
   },
-
-  minimized: {
-    position: "fixed",
-    bottom: "env(safe-area-inset-bottom, 10px)",
-    right: "10px",
-    width: "35vw",
-    height: "45vw",
-    maxWidth: "200px",
-    maxHeight: "260px",
-    borderRadius: "12px",
-    overflow: "hidden",
-    background: "black",
-    zIndex: 9999,
-  },
-
-  remote: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-  },
-
+  remote: { width: "100%", height: "100%", objectFit: "cover" },
   local: {
     position: "absolute",
-    bottom: "80px",
-    right: "10px",
-    width: "30vw",
-    maxWidth: "120px",
-    borderRadius: "10px",
-    border: "2px solid white",
+    width: 120,
+    bottom: 80,
+    right: 10,
   },
-
+  top: {
+    position: "absolute",
+    top: 10,
+    width: "100%",
+    textAlign: "center",
+    color: "white",
+  },
   controls: {
     position: "absolute",
-    bottom: "env(safe-area-inset-bottom, 15px)",
+    bottom: 20,
     width: "100%",
     display: "flex",
     justifyContent: "center",
-    gap: "8px",
-    flexWrap: "wrap",
-  },
-
-  popup: {
-    background: "rgba(0,0,0,0.7)",
-    padding: "16px",
-    borderRadius: "12px",
-    textAlign: "center",
-  },
-
-  row: {
-    display: "flex",
-    gap: "10px",
-    justifyContent: "center",
-  },
-
-  accept: {
-    padding: "12px 18px",
-    background: "green",
-    color: "white",
-    borderRadius: "30px",
-    border: "none",
-  },
-
-  reject: {
-    padding: "12px 18px",
-    background: "gray",
-    color: "white",
-    borderRadius: "30px",
-    border: "none",
-  },
-
-  end: {
-    padding: "12px 18px",
-    background: "red",
-    color: "white",
-    borderRadius: "30px",
-    border: "none",
+    gap: 10,
   },
 };
