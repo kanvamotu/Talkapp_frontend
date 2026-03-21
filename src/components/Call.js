@@ -1,10 +1,15 @@
-import React, { useEffect, useRef, useCallback } from "react";
+import React, { useEffect, useRef, useCallback, useState } from "react";
 
 const Call = ({ socket, callData, setCallData }) => {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
+  const ringtoneRef = useRef(null);
+
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraOff, setIsCameraOff] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
 
   /* -------------------- CLEANUP -------------------- */
   const cleanupCall = useCallback(() => {
@@ -18,38 +23,57 @@ const Call = ({ socket, callData, setCallData }) => {
       localStreamRef.current = null;
     }
 
+    if (ringtoneRef.current) {
+      ringtoneRef.current.pause();
+      ringtoneRef.current.currentTime = 0;
+    }
+
     setCallData(null);
   }, [setCallData]);
 
+  /* -------------------- RINGTONE -------------------- */
+  useEffect(() => {
+    if (callData?.type === "incoming") {
+      ringtoneRef.current?.play().catch(() => {});
+    } else {
+      ringtoneRef.current?.pause();
+      if (ringtoneRef.current) ringtoneRef.current.currentTime = 0;
+    }
+  }, [callData]);
+
   /* -------------------- START MEDIA -------------------- */
   const startMedia = useCallback(
-    async (pc, callData) => {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: callData.video,
-        audio: true,
-      });
-
-      localStreamRef.current = stream;
-
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-
-      stream.getTracks().forEach((track) => {
-        pc.addTrack(track, stream);
-      });
-
-      if (callData.type === "outgoing") {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        socket.emit("callUser", {
-          to: callData.userId,
-          offer,
+    async (pc, data) => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: data.video,
+          audio: true,
         });
+
+        localStreamRef.current = stream;
+
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = stream;
+        }
+
+        stream.getTracks().forEach((track) => {
+          pc.addTrack(track, stream);
+        });
+
+        if (data.type === "outgoing") {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          socket.emit("callUser", {
+            to: data.userId,
+            offer,
+          });
+        }
+      } catch (err) {
+        console.error("Media error:", err);
       }
     },
-    [socket],
+    [socket]
   );
 
   /* -------------------- CREATE PEER -------------------- */
@@ -86,42 +110,75 @@ const Call = ({ socket, callData, setCallData }) => {
 
     startMedia(pc, callData);
 
-    return () => {
-      cleanupCall();
-    };
+    return () => cleanupCall();
   }, [callData, socket, startMedia, cleanupCall]);
 
   /* -------------------- SOCKET EVENTS -------------------- */
   useEffect(() => {
-    if (!peerRef.current) return;
+    if (!socket) return;
 
-    socket.on("callAccepted", async ({ answer }) => {
+    const handleCallAccepted = async ({ answer }) => {
+      if (!peerRef.current) return;
+
       await peerRef.current.setRemoteDescription(
-        new RTCSessionDescription(answer),
+        new RTCSessionDescription(answer)
       );
-    });
 
-    socket.on("iceCandidate", async ({ candidate }) => {
-      if (candidate) {
-        await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+      setCallData((prev) => ({ ...prev, type: "ongoing" }));
+    };
+
+    const handleIceCandidate = async ({ candidate }) => {
+      if (candidate && peerRef.current) {
+        await peerRef.current.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
       }
-    });
+    };
 
-    socket.on("callEnded", cleanupCall);
+    const handleCallEnded = () => cleanupCall();
+
+    socket.on("callAccepted", handleCallAccepted);
+    socket.on("iceCandidate", handleIceCandidate);
+    socket.on("callEnded", handleCallEnded);
 
     return () => {
-      socket.off("callAccepted");
-      socket.off("iceCandidate");
-      socket.off("callEnded");
+      socket.off("callAccepted", handleCallAccepted);
+      socket.off("iceCandidate", handleIceCandidate);
+      socket.off("callEnded", handleCallEnded);
     };
-  }, [socket, cleanupCall]);
+  }, [socket, cleanupCall, setCallData]);
 
-  /* -------------------- ACCEPT -------------------- */
+  /* -------------------- CONTROLS -------------------- */
+  const toggleMute = () => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = isMuted;
+    });
+
+    setIsMuted(!isMuted);
+  };
+
+  const toggleCamera = () => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+
+    stream.getVideoTracks().forEach((track) => {
+      track.enabled = isCameraOff;
+    });
+
+    setIsCameraOff(!isCameraOff);
+  };
+
+  /* -------------------- ACTIONS -------------------- */
   const acceptCall = async () => {
     const pc = peerRef.current;
     if (!pc) return;
 
-    await pc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+    await pc.setRemoteDescription(
+      new RTCSessionDescription(callData.offer)
+    );
 
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
@@ -130,6 +187,8 @@ const Call = ({ socket, callData, setCallData }) => {
       to: callData.userId,
       answer,
     });
+
+    setCallData((prev) => ({ ...prev, type: "ongoing" }));
   };
 
   const rejectCall = () => {
@@ -144,57 +203,84 @@ const Call = ({ socket, callData, setCallData }) => {
 
   if (!callData) return null;
 
-return (
-  <div style={styles.container}>
-    
-    {/* Remote Video (Full Screen) */}
-    <video
-      ref={remoteVideoRef}
-      autoPlay
-      playsInline
-      style={styles.remoteVideo}   // ✅ APPLY THIS
-    />
+  return (
+    <div style={isMinimized ? styles.minimizedContainer : styles.container}>
+      {/* 🔊 RINGTONE */}
+      <audio ref={ringtoneRef} loop src="/ringtone.mp3" />
 
-    {/* Local Video (Small Box) */}
-    <video
-      ref={localVideoRef}
-      autoPlay
-      playsInline
-      muted
-      style={styles.localVideo}   // ✅ APPLY THIS
-    />
+      {/* 🎥 Remote */}
+      <video ref={remoteVideoRef} autoPlay playsInline style={styles.remoteVideo} />
 
-    {/* Incoming Call Buttons */}
-    {callData.type === "incoming" && (
-      <div style={styles.controls}>   {/* ✅ APPLY */}
-        <button onClick={acceptCall}>Accept</button>
-        <button onClick={rejectCall}>Reject</button>
+      {/* 🎥 Local */}
+      <video
+        ref={localVideoRef}
+        autoPlay
+        playsInline
+        muted
+        style={styles.localVideo}
+      />
+
+      {/* 🎛 Controls */}
+      <div style={styles.controls}>
+        {callData.type === "incoming" ? (
+          <div style={styles.incomingBox}>
+            <h3 style={{ color: "white" }}>Incoming Call...</h3>
+            <div style={{ display: "flex", gap: "20px" }}>
+              <button style={styles.acceptBtn} onClick={acceptCall}>
+                Accept
+              </button>
+              <button style={styles.rejectBtn} onClick={rejectCall}>
+                Reject
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <button onClick={toggleMute}>
+              {isMuted ? "Unmute 🎤" : "Mute 🎤"}
+            </button>
+
+            <button onClick={toggleCamera}>
+              {isCameraOff ? "Camera On 📷" : "Camera Off 📷"}
+            </button>
+
+            <button onClick={() => setIsMinimized(!isMinimized)}>
+              {isMinimized ? "Maximize 🪟" : "Minimize 🪟"}
+            </button>
+
+            <button style={styles.endBtn} onClick={endCall}>
+              End Call
+            </button>
+          </>
+        )}
       </div>
-    )}
-
-    {/* End Call Button */}
-    <div style={styles.controls}>
-      <button onClick={endCall} style={styles.endBtn}>
-        End Call
-      </button>
     </div>
-
-  </div>
-);
+  );
 };
 
 export default Call;
 
-
-
+/* -------------------- STYLES -------------------- */
 const styles = {
   container: {
     position: "fixed",
     top: 0,
     left: 0,
-    width: "100%",
-    height: "100%",
+    width: "100vw",
+    height: "100vh",
     backgroundColor: "black",
+    zIndex: 9999,
+  },
+
+  minimizedContainer: {
+    position: "fixed",
+    bottom: "20px",
+    right: "20px",
+    width: "200px",
+    height: "260px",
+    backgroundColor: "black",
+    borderRadius: "10px",
+    overflow: "hidden",
     zIndex: 9999,
   },
 
@@ -206,10 +292,11 @@ const styles = {
 
   localVideo: {
     position: "absolute",
-    bottom: 20,
-    right: 20,
-    width: "100px",
-    height: "140px",
+    bottom: "12vh",
+    right: "3vw",
+    width: "28vw",
+    maxWidth: "160px",
+    aspectRatio: "3/4",
     borderRadius: "10px",
     border: "2px solid white",
     objectFit: "cover",
@@ -217,18 +304,42 @@ const styles = {
 
   controls: {
     position: "absolute",
-    bottom: 30,
+    bottom: "env(safe-area-inset-bottom, 20px)",
     width: "100%",
     display: "flex",
     justifyContent: "center",
-    gap: "20px",
+    gap: "15px",
+    flexWrap: "wrap",
+  },
+
+  incomingBox: {
+    background: "rgba(0,0,0,0.7)",
+    padding: "20px",
+    borderRadius: "12px",
+    textAlign: "center",
+  },
+
+  acceptBtn: {
+    padding: "14px 24px",
+    backgroundColor: "green",
+    color: "white",
+    border: "none",
+    borderRadius: "50px",
+  },
+
+  rejectBtn: {
+    padding: "14px 24px",
+    backgroundColor: "gray",
+    color: "white",
+    border: "none",
+    borderRadius: "50px",
   },
 
   endBtn: {
-    padding: "12px 20px",
+    padding: "14px 24px",
     backgroundColor: "red",
     color: "white",
     border: "none",
-    borderRadius: "10px",
+    borderRadius: "50px",
   },
 };
