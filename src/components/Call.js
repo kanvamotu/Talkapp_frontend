@@ -10,23 +10,25 @@ const Call = ({ socket, callData, setCallData }) => {
   const timerRef = useRef(null);
 
   const [time, setTime] = useState(0);
+  const [status, setStatus] = useState("Connecting...");
+  const [network, setNetwork] = useState("good");
   const [isMuted, setIsMuted] = useState(false);
   const [isCamOff, setIsCamOff] = useState(false);
   const [minimized, setMinimized] = useState(false);
 
   /* ---------------- TIMER ---------------- */
-  const startTimer = useCallback(() => {
+  const startTimer = () => {
     if (timerRef.current) return;
     timerRef.current = setInterval(() => {
       setTime((t) => t + 1);
     }, 1000);
-  }, []);
+  };
 
-  const stopTimer = useCallback(() => {
+  const stopTimer = () => {
     clearInterval(timerRef.current);
     timerRef.current = null;
     setTime(0);
-  }, []);
+  };
 
   const formatTime = () => {
     const m = String(Math.floor(time / 60)).padStart(2, "0");
@@ -62,29 +64,63 @@ const Call = ({ socket, callData, setCallData }) => {
       }
     };
 
+    /* 🔥 CONNECTION STATE HANDLING */
+    pc.onconnectionstatechange = () => {
+      const state = pc.connectionState;
+
+      if (state === "connected") {
+        setStatus("Connected");
+        setNetwork("good");
+        startTimer();
+      }
+
+      if (state === "connecting") {
+        setStatus("Connecting...");
+        setNetwork("medium");
+      }
+
+      if (state === "disconnected") {
+        setStatus("Reconnecting...");
+        setNetwork("poor");
+      }
+
+      if (state === "failed") {
+        setStatus("Connection failed");
+        setNetwork("poor");
+        cleanup();
+      }
+
+      if (state === "closed") {
+        cleanup();
+      }
+    };
+
     return pc;
   }, [socket, callData?.userId]);
 
   /* ---------------- MEDIA ---------------- */
-  const startMedia = useCallback(async (video = true) => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video,
-      audio: true,
-    });
+  const startMedia = async (video = true) => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video,
+        audio: true,
+      });
 
-    streamRef.current = stream;
+      streamRef.current = stream;
 
-    if (localRef.current) {
-      localRef.current.srcObject = stream;
-      localRef.current.muted = true;
+      if (localRef.current) {
+        localRef.current.srcObject = stream;
+        localRef.current.muted = true;
+      }
+
+      stream.getTracks().forEach((track) => {
+        peerRef.current?.addTrack(track, stream);
+      });
+    } catch (err) {
+      setStatus("Camera/Mic denied ❌");
+      console.error(err);
     }
-
-    if (!peerRef.current) return;
-
-    stream.getTracks().forEach((track) => {
-      peerRef.current.addTrack(track, stream);
-    });
-  }, []);
+  };
 
   /* ---------------- CLEANUP ---------------- */
   const cleanup = useCallback(() => {
@@ -101,13 +137,14 @@ const Call = ({ socket, callData, setCallData }) => {
 
     stopTimer();
     setCallData(null);
-  }, [setCallData, stopTimer]);
+  }, [setCallData]);
 
-  /* ---------------- INCOMING ---------------- */
+  /* ---------------- SOCKET ---------------- */
   useEffect(() => {
     if (!socket) return;
 
-    const handler = ({ from, offer }) => {
+    const incoming = ({ from, offer }) => {
+      setStatus("Incoming call...");
       setCallData({
         type: "incoming",
         userId: from,
@@ -116,23 +153,57 @@ const Call = ({ socket, callData, setCallData }) => {
       });
     };
 
-    socket.on("incomingCall", handler);
-    return () => socket.off("incomingCall", handler);
-  }, [socket, setCallData]);
+    const accepted = async ({ answer }) => {
+      await peerRef.current.setRemoteDescription(
+        new RTCSessionDescription(answer)
+      );
 
-  /* ---------------- RINGTONE ---------------- */
-  useEffect(() => {
-    if (callData?.type === "incoming") {
-      ringtone.current?.play().catch(() => {});
-    } else {
-      ringtone.current?.pause();
-    }
-  }, [callData]);
+      /* ✅ flush ICE */
+      for (let c of iceQueue.current) {
+        await peerRef.current.addIceCandidate(
+          new RTCIceCandidate(c)
+        );
+      }
+      iceQueue.current = [];
+
+      setCallData((p) => ({ ...p, type: "ongoing" }));
+    };
+
+    const ice = async ({ candidate }) => {
+      if (!peerRef.current) return;
+
+      if (peerRef.current.remoteDescription) {
+        await peerRef.current.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
+      } else {
+        iceQueue.current.push(candidate);
+      }
+    };
+
+    const end = cleanup;
+    const reject = cleanup;
+
+    socket.on("incomingCall", incoming);
+    socket.on("callAccepted", accepted);
+    socket.on("iceCandidate", ice);
+    socket.on("callEnded", end);
+    socket.on("callRejected", reject);
+
+    return () => {
+      socket.off("incomingCall", incoming);
+      socket.off("callAccepted", accepted);
+      socket.off("iceCandidate", ice);
+      socket.off("callEnded", end);
+      socket.off("callRejected", reject);
+    };
+  }, [socket, cleanup, setCallData]);
 
   /* ---------------- OUTGOING ---------------- */
   useEffect(() => {
     if (!callData || callData.type !== "outgoing") return;
 
+    setStatus("Calling...");
     peerRef.current = createPeer();
 
     (async () => {
@@ -146,12 +217,11 @@ const Call = ({ socket, callData, setCallData }) => {
         offer,
       });
     })();
-  }, [callData, createPeer, startMedia, socket]);
+  }, [callData, createPeer, socket]);
 
   /* ---------------- ACCEPT ---------------- */
   const acceptCall = async () => {
     peerRef.current = createPeer();
-
     await startMedia(true);
 
     await peerRef.current.setRemoteDescription(
@@ -166,60 +236,25 @@ const Call = ({ socket, callData, setCallData }) => {
       answer,
     });
 
+    /* ✅ flush ICE */
     for (let c of iceQueue.current) {
-      await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
+      await peerRef.current.addIceCandidate(
+        new RTCIceCandidate(c)
+      );
     }
     iceQueue.current = [];
 
     setCallData((p) => ({ ...p, type: "ongoing" }));
-    startTimer();
   };
 
-  /* ---------------- SOCKET ---------------- */
+  /* ---------------- RINGTONE ---------------- */
   useEffect(() => {
-    if (!socket) return;
-
-    const handleAccepted = async ({ answer }) => {
-      await peerRef.current.setRemoteDescription(
-        new RTCSessionDescription(answer)
-      );
-
-      for (let c of iceQueue.current) {
-        await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
-      }
-      iceQueue.current = [];
-
-      setCallData((p) => ({ ...p, type: "ongoing" }));
-      startTimer();
-    };
-
-    const handleICE = async ({ candidate }) => {
-      if (!peerRef.current) return;
-
-      if (peerRef.current.remoteDescription) {
-        await peerRef.current.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
-      } else {
-        iceQueue.current.push(candidate);
-      }
-    };
-
-    const handleEnd = () => cleanup();
-    const handleReject = () => cleanup();
-
-    socket.on("callAccepted", handleAccepted);
-    socket.on("iceCandidate", handleICE);
-    socket.on("callEnded", handleEnd);
-    socket.on("callRejected", handleReject);
-
-    return () => {
-      socket.off("callAccepted", handleAccepted);
-      socket.off("iceCandidate", handleICE);
-      socket.off("callEnded", handleEnd);
-      socket.off("callRejected", handleReject);
-    };
-  }, [socket, cleanup, startTimer, setCallData]);
+    if (callData?.type === "incoming") {
+      ringtone.current?.play().catch(() => {});
+    } else {
+      ringtone.current?.pause();
+    }
+  }, [callData]);
 
   /* ---------------- ACTIONS ---------------- */
   const endCall = () => {
@@ -252,31 +287,43 @@ const Call = ({ socket, callData, setCallData }) => {
     <div style={minimized ? styles.min : styles.full}>
       <audio ref={ringtone} loop src="/ringtone.mp3" />
 
-      <video ref={remoteRef} autoPlay playsInline style={styles.remote} />
-      <video ref={localRef} autoPlay playsInline muted style={styles.local} />
-
-      <div style={styles.top}>
-        {callData.type === "ongoing" && <span>{formatTime()}</span>}
+      <div style={styles.videoContainer}>
+        <video ref={remoteRef} autoPlay playsInline style={styles.remote} />
+        <video ref={localRef} autoPlay playsInline muted style={styles.local} />
       </div>
 
+      {/* TOP BAR */}
+      <div style={styles.top}>
+        <div>{callData.userId}</div>
+        <div style={{ fontSize: 12 }}>
+          {callData.type === "ongoing" ? formatTime() : status}
+        </div>
+        <div style={{ fontSize: 10, opacity: 0.7 }}>
+          Network: {network}
+        </div>
+      </div>
+
+      {/* CONTROLS */}
       <div style={styles.controls}>
         {callData.type === "incoming" ? (
           <>
-            <button onClick={acceptCall}>Accept</button>
-            <button onClick={rejectCall}>Reject</button>
+            <button style={{ ...styles.btn, background: "#22c55e" }} onClick={acceptCall}>📞</button>
+            <button style={{ ...styles.btn, background: "#ef4444" }} onClick={rejectCall}>❌</button>
           </>
         ) : (
           <>
-            <button onClick={toggleMute}>
-              {isMuted ? "Unmute" : "Mute"}
+            <button style={styles.btn} onClick={toggleMute}>
+              {isMuted ? "🔇" : "🎤"}
             </button>
-            <button onClick={toggleCamera}>
-              {isCamOff ? "Cam On" : "Cam Off"}
+            <button style={styles.btn} onClick={toggleCamera}>
+              {isCamOff ? "📷❌" : "📷"}
             </button>
-            <button onClick={() => setMinimized(!minimized)}>
+            <button style={styles.btn} onClick={() => setMinimized(!minimized)}>
               {minimized ? "⬆️" : "⬇️"}
             </button>
-            <button onClick={endCall}>End</button>
+            <button style={{ ...styles.btn, background: "#dc2626" }} onClick={endCall}>
+              🔴
+            </button>
           </>
         )}
       </div>
@@ -288,21 +335,34 @@ export default Call;
 
 /* ---------------- STYLES ---------------- */
 const styles = {
-  full: { position: "fixed", inset: 0, background: "black" },
+  full: {
+    position: "fixed",
+    inset: 0,
+    background: "linear-gradient(135deg, #0f172a, #1e293b)",
+  },
   min: {
     position: "fixed",
     bottom: 20,
     right: 20,
-    width: 200,
-    height: 260,
-    background: "black",
+    width: 240,
+    height: 300,
+    borderRadius: 16,
+    overflow: "hidden",
+    background: "#0f172a",
+  },
+  videoContainer: {
+    position: "relative",
+    width: "100%",
+    height: "100%",
   },
   remote: { width: "100%", height: "100%", objectFit: "cover" },
   local: {
     position: "absolute",
-    width: 120,
-    bottom: 80,
+    width: 140,
+    bottom: 90,
     right: 10,
+    borderRadius: 10,
+    border: "2px solid white",
   },
   top: {
     position: "absolute",
@@ -317,6 +377,16 @@ const styles = {
     width: "100%",
     display: "flex",
     justifyContent: "center",
-    gap: 10,
+    gap: 12,
+  },
+  btn: {
+    width: 55,
+    height: 55,
+    borderRadius: "50%",
+    border: "none",
+    background: "#334155",
+    color: "white",
+    fontSize: 18,
+    cursor: "pointer",
   },
 };
