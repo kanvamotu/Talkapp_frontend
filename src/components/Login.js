@@ -124,8 +124,8 @@ logo: {
 input: {
   padding: "13px",
   borderRadius: "10px",
-  border: "1px solid rgba(255,255,255,0.25)",
-  background: "rgba(255,255,255,0.12)",
+  border: "1px solid rgb(255, 255, 255)",
+  background: "rgb(255, 255, 255)",
   color: "#fff",
   fontSize: "14px",
   outline: "none",
