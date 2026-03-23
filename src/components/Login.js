@@ -36,7 +36,7 @@ const Login = ({ setLoggedIn, setUser, setSocket, switchToRegister }) => {
 
         {/* 🔥 LOGO */}
         <img
-          src="https://dynamic.design.com/preview/logodraft/2b9a11b0-c483-4b31-bba6-eab59b22c31c/image/large.png"
+          src="https://dynamic.design.com/preview/logodraft/f0ac73df-7212-443d-8239-a0ffceb94ecb/image/large.png"
           alt="App Logo"
           style={styles.logo}
         />
