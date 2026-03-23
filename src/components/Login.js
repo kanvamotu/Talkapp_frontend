@@ -102,6 +102,7 @@ formBox: {
   boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
 },
 
+
 logo: {
   width: "140px",   
   marginBottom: "25px",
@@ -124,8 +125,8 @@ logo: {
 input: {
   padding: "13px",
   borderRadius: "10px",
-  border: "1px solid rgb(255, 255, 255)",
-  background: "rgb(255, 255, 255)",
+  border: "1px solid rgba(255,255,255,0.25)",
+  background: "rgba(255,255,255,0.12)",
   color: "#fff",
   fontSize: "14px",
   outline: "none",
