@@ -36,6 +36,23 @@ const Call = ({ socket, callData, setCallData }) => {
     return `${m}:${s}`;
   };
 
+  /* ---------------- CLEANUP ---------------- */
+  const cleanup = useCallback(() => {
+    peerRef.current?.close();
+    peerRef.current = null;
+
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+
+    iceQueue.current = [];
+
+    ringtone.current?.pause();
+    if (ringtone.current) ringtone.current.currentTime = 0;
+
+    stopTimer();
+    setCallData(null);
+  }, [setCallData]);
+
   /* ---------------- PEER ---------------- */
   const createPeer = useCallback(() => {
     const pc = new RTCPeerConnection({
@@ -96,7 +113,7 @@ const Call = ({ socket, callData, setCallData }) => {
     };
 
     return pc;
-  }, [socket, callData?.userId]);
+  }, [socket, callData?.userId, cleanup]);
 
   /* ---------------- MEDIA ---------------- */
   const startMedia = async (video = true) => {
@@ -122,23 +139,6 @@ const Call = ({ socket, callData, setCallData }) => {
     }
   };
 
-  /* ---------------- CLEANUP ---------------- */
-  const cleanup = useCallback(() => {
-    peerRef.current?.close();
-    peerRef.current = null;
-
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-
-    iceQueue.current = [];
-
-    ringtone.current?.pause();
-    if (ringtone.current) ringtone.current.currentTime = 0;
-
-    stopTimer();
-    setCallData(null);
-  }, [setCallData]);
-
   /* ---------------- SOCKET ---------------- */
   useEffect(() => {
     if (!socket) return;
@@ -155,14 +155,12 @@ const Call = ({ socket, callData, setCallData }) => {
 
     const accepted = async ({ answer }) => {
       await peerRef.current.setRemoteDescription(
-        new RTCSessionDescription(answer)
+        new RTCSessionDescription(answer),
       );
 
       /* ✅ flush ICE */
       for (let c of iceQueue.current) {
-        await peerRef.current.addIceCandidate(
-          new RTCIceCandidate(c)
-        );
+        await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
       }
       iceQueue.current = [];
 
@@ -173,9 +171,7 @@ const Call = ({ socket, callData, setCallData }) => {
       if (!peerRef.current) return;
 
       if (peerRef.current.remoteDescription) {
-        await peerRef.current.addIceCandidate(
-          new RTCIceCandidate(candidate)
-        );
+        await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
       } else {
         iceQueue.current.push(candidate);
       }
@@ -225,7 +221,7 @@ const Call = ({ socket, callData, setCallData }) => {
     await startMedia(true);
 
     await peerRef.current.setRemoteDescription(
-      new RTCSessionDescription(callData.offer)
+      new RTCSessionDescription(callData.offer),
     );
 
     const answer = await peerRef.current.createAnswer();
@@ -238,9 +234,7 @@ const Call = ({ socket, callData, setCallData }) => {
 
     /* ✅ flush ICE */
     for (let c of iceQueue.current) {
-      await peerRef.current.addIceCandidate(
-        new RTCIceCandidate(c)
-      );
+      await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
     }
     iceQueue.current = [];
 
@@ -298,17 +292,25 @@ const Call = ({ socket, callData, setCallData }) => {
         <div style={{ fontSize: 12 }}>
           {callData.type === "ongoing" ? formatTime() : status}
         </div>
-        <div style={{ fontSize: 10, opacity: 0.7 }}>
-          Network: {network}
-        </div>
+        <div style={{ fontSize: 10, opacity: 0.7 }}>Network: {network}</div>
       </div>
 
       {/* CONTROLS */}
       <div style={styles.controls}>
         {callData.type === "incoming" ? (
           <>
-            <button style={{ ...styles.btn, background: "#22c55e" }} onClick={acceptCall}>📞</button>
-            <button style={{ ...styles.btn, background: "#ef4444" }} onClick={rejectCall}>❌</button>
+            <button
+              style={{ ...styles.btn, background: "#22c55e" }}
+              onClick={acceptCall}
+            >
+              📞
+            </button>
+            <button
+              style={{ ...styles.btn, background: "#ef4444" }}
+              onClick={rejectCall}
+            >
+              ❌
+            </button>
           </>
         ) : (
           <>
@@ -321,7 +323,10 @@ const Call = ({ socket, callData, setCallData }) => {
             <button style={styles.btn} onClick={() => setMinimized(!minimized)}>
               {minimized ? "⬆️" : "⬇️"}
             </button>
-            <button style={{ ...styles.btn, background: "#dc2626" }} onClick={endCall}>
+            <button
+              style={{ ...styles.btn, background: "#dc2626" }}
+              onClick={endCall}
+            >
               🔴
             </button>
           </>
@@ -338,15 +343,18 @@ const styles = {
   full: {
     position: "fixed",
     inset: 0,
-    background: "linear-gradient(135deg, #0f172a, #1e293b)",
+    paddingBottom: "env(safe-area-inset-bottom)",
+    paddingTop: "env(safe-area-inset-top)",
   },
   min: {
     position: "fixed",
     bottom: 20,
     right: 20,
-    width: 240,
-    height: 300,
+    width: "40vw",
+    height: "30vh",
     borderRadius: 16,
+    minWidth: 180,
+    minHeight: 220,
     overflow: "hidden",
     background: "#0f172a",
   },
@@ -358,30 +366,35 @@ const styles = {
   remote: { width: "100%", height: "100%", objectFit: "cover" },
   local: {
     position: "absolute",
-    width: 140,
-    bottom: 90,
-    right: 10,
+    width: "30%", // ✅ responsive
+    maxWidth: 160,
+    bottom: "18%",
+    right: "3%",
     borderRadius: 10,
-    border: "2px solid white",
   },
   top: {
     position: "absolute",
-    top: 10,
+    top: 0,
+    paddingTop: "calc(env(safe-area-inset-top) + 10px)",
     width: "100%",
     textAlign: "center",
     color: "white",
   },
   controls: {
     position: "absolute",
-    bottom: 20,
+    bottom: "calc(env(safe-area-inset-bottom) + 10px)",
     width: "100%",
     display: "flex",
     justifyContent: "center",
-    gap: 12,
+    gap: "4vw", // ✅ scalable
   },
   btn: {
-    width: 55,
-    height: 55,
+    width: "14vw",
+    height: "14vw",
+    maxWidth: 60,
+    maxHeight: 60,
+    minWidth: 50,
+    minHeight: 50,
     borderRadius: "50%",
     border: "none",
     background: "#334155",
