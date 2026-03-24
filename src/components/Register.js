@@ -41,9 +41,28 @@ const Register = ({ switchToLogin }) => {
 
   return (
     <div style={styles.container}>
-      <div style={styles.card}>
-        <h2 style={styles.title}>Create Account</h2>
-        <p style={styles.subtitle}>Join our platform</p>
+      <style>
+        {`
+          input::placeholder {
+            color: white;
+            opacity: 1;
+          }
+
+          input:focus::placeholder {
+            color: white;
+          }
+        `}
+      </style>
+
+      <div style={styles.formBox}>
+        {/* 🔥 LOGO */}
+        <img
+          src="https://dynamic.design.com/preview/logodraft/f0ac73df-7212-443d-8239-a0ffceb94ecb/image/large.png"
+          alt="App Logo"
+          style={styles.logo}
+        />
+
+        <p style={styles.subtitle}>Create your account</p>
 
         <form onSubmit={handleRegister} style={styles.form}>
           <input
@@ -72,7 +91,9 @@ const Register = ({ switchToLogin }) => {
             style={styles.input}
           />
 
-          <button style={styles.button}>Create Account</button>
+          <button type="submit" style={styles.button}>
+            Create Account
+          </button>
 
           {error && <p style={styles.error}>{error}</p>}
           {success && <p style={styles.success}>{success}</p>}
@@ -80,7 +101,7 @@ const Register = ({ switchToLogin }) => {
 
         <p style={styles.loginText}>
           Already have an account?{" "}
-          <span style={styles.link} onClick={switchToLogin}>
+          <span style={styles.loginLink} onClick={switchToLogin}>
             Login
           </span>
         </p>
@@ -95,76 +116,83 @@ const styles = {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    background: "linear-gradient(135deg, #667eea, #764ba2)",
-    fontFamily: "Arial, sans-serif",
+    background: "linear-gradient(135deg, rgb(48, 35, 174), rgb(200, 109, 215))",
+    fontFamily: "Inter, sans-serif",
   },
 
-  card: {
-    background: "#fff",
-    padding: "40px",
-    borderRadius: "12px",
-    width: "350px",
-    boxShadow: "0 12px 30px rgba(0,0,0,0.2)",
+  formBox: {
+    backdropFilter: "blur(20px)",
+    background: "rgba(255, 255, 255, 0.1)",
+    padding: "45px 35px",
+    borderRadius: "18px",
+    width: "380px",
     textAlign: "center",
+    border: "1px solid rgba(255,255,255,0.2)",
+    boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
   },
 
-  title: {
-    marginBottom: 5,
-    fontSize: 26,
-    fontWeight: "bold",
-    color: "#1F2937",
+  logo: {
+    width: "140px",
+    marginBottom: "25px",
+    borderRadius: "14px",
+    boxShadow: "0 8px 25px rgba(0,0,0,0.35)",
   },
 
   subtitle: {
-    marginBottom: 25,
-    color: "#6B7280",
-    fontSize: 14,
+    marginBottom: "25px",
+    color: "#e0e0e0",
+    fontSize: "14px",
   },
 
   form: {
     display: "flex",
     flexDirection: "column",
-    gap: 15,
+    gap: "15px",
   },
 
   input: {
-    padding: 12,
-    borderRadius: 6,
-    border: "1px solid #D1D5DB",
-    fontSize: 14,
+    padding: "13px",
+    borderRadius: "10px",
+    border: "1px solid rgba(255,255,255,0.25)",
+    background: "rgba(255,255,255,0.12)",
+    color: "#fff",
+    fontSize: "14px",
     outline: "none",
-    transition: "0.2s",
+    transition: "0.3s",
   },
 
   button: {
-    padding: 12,
-    borderRadius: 6,
+    padding: "13px",
+    borderRadius: "10px",
     border: "none",
-    background: "#667eea",
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
+    background: "#ffffff",
+    color: "rgb(48, 35, 174)",
+    fontSize: "15px",
+    fontWeight: "600",
     cursor: "pointer",
+    transition: "0.3s",
+    boxShadow: "0 5px 20px rgba(0,0,0,0.2)",
   },
 
   error: {
-    color: "#DC2626",
-    fontSize: 14,
+    color: "#ff6b6b",
+    fontSize: "13px",
   },
 
   success: {
-    color: "#16A34A",
-    fontSize: 14,
+    color: "#4ade80",
+    fontSize: "13px",
   },
 
   loginText: {
-    marginTop: 20,
-    fontSize: 14,
+    marginTop: "20px",
+    fontSize: "14px",
+    color: "#ddd",
   },
 
-  link: {
-    color: "#667eea",
-    fontWeight: "bold",
+  loginLink: {
+    color: "#ffffff",
+    fontWeight: "600",
     cursor: "pointer",
   },
 };
