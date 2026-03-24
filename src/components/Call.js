@@ -343,6 +343,7 @@ const styles = {
   full: {
     position: "fixed",
     inset: 0,
+    background: "#0f172a",
     paddingBottom: "env(safe-area-inset-bottom)",
     paddingTop: "env(safe-area-inset-top)",
   },
