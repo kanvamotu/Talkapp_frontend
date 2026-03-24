@@ -6,7 +6,6 @@ const Call = ({ socket, callData, setCallData }) => {
   const peerRef = useRef(null);
   const streamRef = useRef(null);
   const iceQueue = useRef([]);
-  const ringtone = useRef(null);
   const timerRef = useRef(null);
 
   const [time, setTime] = useState(0);
@@ -19,9 +18,7 @@ const Call = ({ socket, callData, setCallData }) => {
   /* ---------------- TIMER ---------------- */
   const startTimer = () => {
     if (timerRef.current) return;
-    timerRef.current = setInterval(() => {
-      setTime((t) => t + 1);
-    }, 1000);
+    timerRef.current = setInterval(() => setTime(t => t + 1), 1000);
   };
 
   const stopTimer = () => {
@@ -30,25 +27,20 @@ const Call = ({ socket, callData, setCallData }) => {
     setTime(0);
   };
 
-  const formatTime = () => {
-    const m = String(Math.floor(time / 60)).padStart(2, "0");
-    const s = String(time % 60).padStart(2, "0");
-    return `${m}:${s}`;
-  };
+  const formatTime = () =>
+    `${String(Math.floor(time / 60)).padStart(2, "0")}:${String(
+      time % 60
+    ).padStart(2, "0")}`;
 
   /* ---------------- CLEANUP ---------------- */
   const cleanup = useCallback(() => {
     peerRef.current?.close();
     peerRef.current = null;
 
-    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
 
     iceQueue.current = [];
-
-    ringtone.current?.pause();
-    if (ringtone.current) ringtone.current.currentTime = 0;
-
     stopTimer();
     setCallData(null);
   }, [setCallData]);
@@ -66,7 +58,7 @@ const Call = ({ socket, callData, setCallData }) => {
       ],
     });
 
-    pc.onicecandidate = (e) => {
+    pc.onicecandidate = e => {
       if (e.candidate && callData?.userId) {
         socket.emit("iceCandidate", {
           to: callData.userId,
@@ -75,13 +67,12 @@ const Call = ({ socket, callData, setCallData }) => {
       }
     };
 
-    pc.ontrack = (e) => {
+    pc.ontrack = e => {
       if (remoteRef.current) {
         remoteRef.current.srcObject = e.streams[0];
       }
     };
 
-    /* 🔥 CONNECTION STATE HANDLING */
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
 
@@ -90,26 +81,20 @@ const Call = ({ socket, callData, setCallData }) => {
         setNetwork("good");
         startTimer();
       }
-
       if (state === "connecting") {
         setStatus("Connecting...");
         setNetwork("medium");
       }
-
       if (state === "disconnected") {
         setStatus("Reconnecting...");
         setNetwork("poor");
       }
-
       if (state === "failed") {
         setStatus("Connection failed");
         setNetwork("poor");
         cleanup();
       }
-
-      if (state === "closed") {
-        cleanup();
-      }
+      if (state === "closed") cleanup();
     };
 
     return pc;
@@ -130,12 +115,11 @@ const Call = ({ socket, callData, setCallData }) => {
         localRef.current.muted = true;
       }
 
-      stream.getTracks().forEach((track) => {
+      stream.getTracks().forEach(track => {
         peerRef.current?.addTrack(track, stream);
       });
-    } catch (err) {
+    } catch {
       setStatus("Camera/Mic denied ❌");
-      console.error(err);
     }
   };
 
@@ -155,43 +139,45 @@ const Call = ({ socket, callData, setCallData }) => {
 
     const accepted = async ({ answer }) => {
       await peerRef.current.setRemoteDescription(
-        new RTCSessionDescription(answer),
+        new RTCSessionDescription(answer)
       );
 
-      /* ✅ flush ICE */
       for (let c of iceQueue.current) {
-        await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
+        try {
+          await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
+        } catch {}
       }
       iceQueue.current = [];
 
-      setCallData((p) => ({ ...p, type: "ongoing" }));
+      setCallData(p => ({ ...p, type: "ongoing" }));
     };
 
     const ice = async ({ candidate }) => {
       if (!peerRef.current) return;
 
       if (peerRef.current.remoteDescription) {
-        await peerRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        try {
+          await peerRef.current.addIceCandidate(
+            new RTCIceCandidate(candidate)
+          );
+        } catch {}
       } else {
         iceQueue.current.push(candidate);
       }
     };
 
-    const end = cleanup;
-    const reject = cleanup;
-
     socket.on("incomingCall", incoming);
     socket.on("callAccepted", accepted);
     socket.on("iceCandidate", ice);
-    socket.on("callEnded", end);
-    socket.on("callRejected", reject);
+    socket.on("callEnded", cleanup);
+    socket.on("callRejected", cleanup);
 
     return () => {
       socket.off("incomingCall", incoming);
       socket.off("callAccepted", accepted);
       socket.off("iceCandidate", ice);
-      socket.off("callEnded", end);
-      socket.off("callRejected", reject);
+      socket.off("callEnded", cleanup);
+      socket.off("callRejected", cleanup);
     };
   }, [socket, cleanup, setCallData]);
 
@@ -221,7 +207,7 @@ const Call = ({ socket, callData, setCallData }) => {
     await startMedia(true);
 
     await peerRef.current.setRemoteDescription(
-      new RTCSessionDescription(callData.offer),
+      new RTCSessionDescription(callData.offer)
     );
 
     const answer = await peerRef.current.createAnswer();
@@ -232,23 +218,15 @@ const Call = ({ socket, callData, setCallData }) => {
       answer,
     });
 
-    /* ✅ flush ICE */
     for (let c of iceQueue.current) {
-      await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
+      try {
+        await peerRef.current.addIceCandidate(new RTCIceCandidate(c));
+      } catch {}
     }
     iceQueue.current = [];
 
-    setCallData((p) => ({ ...p, type: "ongoing" }));
+    setCallData(p => ({ ...p, type: "ongoing" }));
   };
-
-  /* ---------------- RINGTONE ---------------- */
-  useEffect(() => {
-    if (callData?.type === "incoming") {
-      ringtone.current?.play().catch(() => {});
-    } else {
-      ringtone.current?.pause();
-    }
-  }, [callData]);
 
   /* ---------------- ACTIONS ---------------- */
   const endCall = () => {
@@ -262,55 +240,63 @@ const Call = ({ socket, callData, setCallData }) => {
   };
 
   const toggleMute = () => {
-    streamRef.current?.getAudioTracks().forEach((t) => {
+    streamRef.current?.getAudioTracks().forEach(t => {
       t.enabled = !t.enabled;
     });
-    setIsMuted((p) => !p);
+    setIsMuted(p => !p);
   };
 
   const toggleCamera = () => {
-    streamRef.current?.getVideoTracks().forEach((t) => {
+    streamRef.current?.getVideoTracks().forEach(t => {
       t.enabled = !t.enabled;
     });
-    setIsCamOff((p) => !p);
+    setIsCamOff(p => !p);
+  };
+
+  /* ---------------- SCREEN SHARE ---------------- */
+  const shareScreen = async () => {
+    const screen = await navigator.mediaDevices.getDisplayMedia({
+      video: true,
+    });
+
+    const track = screen.getVideoTracks()[0];
+
+    const sender = peerRef.current
+      .getSenders()
+      .find(s => s.track.kind === "video");
+
+    if (sender) sender.replaceTrack(track);
+
+    track.onended = () => {
+      const camTrack = streamRef.current.getVideoTracks()[0];
+      sender.replaceTrack(camTrack);
+    };
   };
 
   if (!callData) return null;
 
   return (
     <div style={minimized ? styles.min : styles.full}>
-      <audio ref={ringtone} loop src="/ringtone.mp3" />
-
       <div style={styles.videoContainer}>
         <video ref={remoteRef} autoPlay playsInline style={styles.remote} />
         <video ref={localRef} autoPlay playsInline muted style={styles.local} />
       </div>
 
-      {/* TOP BAR */}
+      {/* TOP */}
       <div style={styles.top}>
         <div>{callData.userId}</div>
         <div style={{ fontSize: 12 }}>
           {callData.type === "ongoing" ? formatTime() : status}
         </div>
-        <div style={{ fontSize: 10, opacity: 0.7 }}>Network: {network}</div>
+        <div style={{ fontSize: 10 }}>Network: {network}</div>
       </div>
 
       {/* CONTROLS */}
       <div style={styles.controls}>
         {callData.type === "incoming" ? (
           <>
-            <button
-              style={{ ...styles.btn, background: "#22c55e" }}
-              onClick={acceptCall}
-            >
-              📞
-            </button>
-            <button
-              style={{ ...styles.btn, background: "#ef4444" }}
-              onClick={rejectCall}
-            >
-              ❌
-            </button>
+            <button style={{ ...styles.btn, background: "#22c55e" }} onClick={acceptCall}>📞</button>
+            <button style={{ ...styles.btn, background: "#ef4444" }} onClick={rejectCall}>❌</button>
           </>
         ) : (
           <>
@@ -320,13 +306,11 @@ const Call = ({ socket, callData, setCallData }) => {
             <button style={styles.btn} onClick={toggleCamera}>
               {isCamOff ? "📷❌" : "📷"}
             </button>
+            <button style={styles.btn} onClick={shareScreen}>🖥️</button>
             <button style={styles.btn} onClick={() => setMinimized(!minimized)}>
               {minimized ? "⬆️" : "⬇️"}
             </button>
-            <button
-              style={{ ...styles.btn, background: "#dc2626" }}
-              onClick={endCall}
-            >
+            <button style={{ ...styles.btn, background: "#dc2626" }} onClick={endCall}>
               🔴
             </button>
           </>
@@ -344,18 +328,14 @@ const styles = {
     position: "fixed",
     inset: 0,
     background: "#0f172a",
-    paddingBottom: "env(safe-area-inset-bottom)",
-    paddingTop: "env(safe-area-inset-top)",
   },
   min: {
     position: "fixed",
     bottom: 20,
     right: 20,
-    width: "40vw",
-    height: "30vh",
+    width: 200,
+    height: 260,
     borderRadius: 16,
-    minWidth: 180,
-    minHeight: 220,
     overflow: "hidden",
     background: "#0f172a",
   },
@@ -367,40 +347,33 @@ const styles = {
   remote: { width: "100%", height: "100%", objectFit: "cover" },
   local: {
     position: "absolute",
-    width: "30%", // ✅ responsive
-    maxWidth: 160,
-    bottom: "18%",
-    right: "3%",
+    width: 120,
+    bottom: 90,
+    right: 20,
     borderRadius: 10,
   },
   top: {
     position: "absolute",
-    top: 0,
-    paddingTop: "calc(env(safe-area-inset-top) + 10px)",
+    top: 10,
     width: "100%",
     textAlign: "center",
     color: "white",
   },
   controls: {
     position: "absolute",
-    bottom: "calc(env(safe-area-inset-bottom) + 10px)",
+    bottom: 20,
     width: "100%",
     display: "flex",
     justifyContent: "center",
-    gap: "4vw", // ✅ scalable
+    gap: 15,
   },
   btn: {
-    width: "14vw",
-    height: "14vw",
-    maxWidth: 60,
-    maxHeight: 60,
-    minWidth: 50,
-    minHeight: 50,
+    width: 55,
+    height: 55,
     borderRadius: "50%",
     border: "none",
     background: "#334155",
     color: "white",
     fontSize: 18,
-    cursor: "pointer",
   },
 };
