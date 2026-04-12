@@ -13,15 +13,15 @@ export const connectSocket = (accessToken) => {
     });
 
     socket.on("connect", () => {
-      console.log("✅ Socket connected:", socket.id);
+      
     });
 
     socket.on("disconnect", (reason) => {
-      console.log("⚠️ Socket disconnected:", reason);
+      
     });
 
     socket.on("connect_error", (err) => {
-      console.error("❌ Socket error:", err.message);
+      
     });
   }
 
